@@ -4,7 +4,13 @@ from scipy import misc
 import numpy as np
 import os 
 import sys
+import random
 from sys import getsizeof
+
+trainNum = list(range(22232))
+random.shuffle(trainNum)
+testNum = list(range(640))
+random.shuffle(testNum)
 
 # WARNING: this will work on little-endian architectures (eg Intel x86) only!
 def readFloToFile(floFile):
@@ -26,47 +32,56 @@ def writeToFile(listName,flag1):
 	print('writing to file ...')
 	imgList = open(listName).readlines()
 	X_data = []	
-	
-	for i, x in enumerate(imgList):
+	for i in trainNum:
 		print(i)
-		imgToRead = str(x.split()[0])
+		imgToRead = str(imgList[i].split()[0])
+		print(imgToRead)
 		if flag1 == 'true':
 			X_data.append(misc.imread(imgToRead))
 		else:
 			X_data.append(readFloToFile(imgToRead))
-
-	finalData = np.asarray(X_data)
+	
   	if flag1 == 'true':
-    		finalData = np.transpose(finalData, (0,3,1,2))
-    	print(getsizeof(finalData))
-	return finalData
+    		return np.transpose(np.asarray(X_data), (0,3,1,2))
+	else:
+		return np.asarray(X_data)
 
 def writeTestData():
 	f = h5py.File("testData.h5", 'w')		    
 
-	finalData = writeToFile("Test_Img1.list",'true')
-	f.create_dataset("img1", data=finalData, compression='gzip', compression_opts=9)
+	imData1 = writeToFile("Test_Img1.list",'true')
+	#f.create_dataset("img1", data=finalData, compression='gzip', compression_opts=9)
 
-	finalData = writeToFile("Test_Img2.list",'true')
-	f.create_dataset("img2", data=finalData, compression='gzip', compression_opts=9)
+	imData2 = writeToFile("Test_Img2.list",'true')
+	#f.create_dataset("img2", data=finalData, compression='gzip', compression_opts=9)
 
-	finalData = writeToFile("Test_Flow.list",'false')
-	f.create_dataset("flow", data=finalData, compression='gzip', compression_opts=9)
-
+	flowData = writeToFile("Test_Flow.list",'false')
+	#f.create_dataset("flow", data=finalData, compression='gzip', compression_opts=9)
+  	finalData = np.concatenate((imData1, imData2, flowData), axis=1)
+  	print(finalData.shape)
+  	f.create_dataset("data", data=finalData, compression='gzip', compression_opts=9)
 	f.close()
 
 def writeTrainData():
 	f = h5py.File("trainData1.h5", 'w')		    
 
-#	finalData = writeToFile("Train_Img1.list",'true')
+	imData1 = writeToFile("Train_Img1.list",'true')
 #	f.create_dataset("img1", data=finalData, compression='gzip', compression_opts=9)
 
-#	finalData = writeToFile("Train_Img2.list",'true')
+	imData2 = writeToFile("Train_Img2.list",'true')
 #	f.create_dataset("img2", data=finalData, compression='gzip', compression_opts=9)
+	
+	finalData = np.concatenate((imData1, imData2), axis=1)
+	print(finalData.shape)
+#	f.create_dataset("data1", data=finalData, compression='gzip', compression_opts=9)
 
-	finalData3 = writeToFile("Train_Flow.list",'false')
-	f.create_dataset("flow", data=finalData3, compression='gzip', compression_opts=9)
-
+	flowData = writeToFile("Train_Flow.list",'false')
+	
+	finalData2 = np.concatenate((finalData, flowData), axis=1)
+	print(finalData2.shape)
+	
+	f.create_dataset("data", data=finalData2, compression='gzip', compression_opts=9)
+	  	
 	f.close()
 
 #writeTestData()
