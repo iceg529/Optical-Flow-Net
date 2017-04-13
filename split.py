@@ -28,23 +28,26 @@ def readFloToFile(floFile):
 		return data2D
 
 
-def writeToFile(listName,flag1):
+def writeTrainData():
 	print('writing to file ...')
-	imgList = open(listName).readlines()
-	X_data = []	
+	f = h5py.File("trainData1.h5", 'r+')
+	img1List = open("Train_Img1.list").readlines()
+	img2List = open("Train_Img2.list").readlines()
+	flowList = open("Train_Flow.list").readlines()
 	for i in trainNum:
 		print(i)
-		imgToRead = str(imgList[i].split()[0])
-		print(imgToRead)
-		if flag1 == 'true':
-			X_data.append(misc.imread(imgToRead))
-		else:
-			X_data.append(readFloToFile(imgToRead))
+		img1ToRead = np.transpose(np.asarray(misc.imread(str(img1List[i].split()[0]))), (2,0,1))
+		img2ToRead = np.transpose(np.asarray(misc.imread(str(img2List[i].split()[0]))), (2,0,1))
+		flowToRead = np.asarray(readFloToFile(str(flowList[i].split()[0])))
+		print(img1ToRead.shape)
+		print(img2ToRead.shape)
+		print(flowToRead.shape)
+		X_data = np.concatenate((img1ToRead, img2ToRead, flowToRead), axis=0)
+		print(X_data.shape)
+		dSetName = "trainData/data"+str(i)
+		f.create_dataset(dSetName, data=X_data, compression='gzip', compression_opts=9)
 	
-  	if flag1 == 'true':
-    		return np.transpose(np.asarray(X_data), (0,3,1,2))
-	else:
-		return np.asarray(X_data)
+  	f.close()
 
 def writeTestData():
 	f = h5py.File("testData.h5", 'w')		    
@@ -62,27 +65,6 @@ def writeTestData():
   	f.create_dataset("data", data=finalData, compression='gzip', compression_opts=9)
 	f.close()
 
-def writeTrainData():
-	f = h5py.File("trainData1.h5", 'w')		    
-
-	imData1 = writeToFile("Train_Img1.list",'true')
-#	f.create_dataset("img1", data=finalData, compression='gzip', compression_opts=9)
-
-	imData2 = writeToFile("Train_Img2.list",'true')
-#	f.create_dataset("img2", data=finalData, compression='gzip', compression_opts=9)
-	
-	finalData = np.concatenate((imData1, imData2), axis=1)
-	print(finalData.shape)
-#	f.create_dataset("data1", data=finalData, compression='gzip', compression_opts=9)
-
-	flowData = writeToFile("Train_Flow.list",'false')
-	
-	finalData2 = np.concatenate((finalData, flowData), axis=1)
-	print(finalData2.shape)
-	
-	f.create_dataset("data", data=finalData2, compression='gzip', compression_opts=9)
-	  	
-	f.close()
 
 #writeTestData()
 writeTrainData()

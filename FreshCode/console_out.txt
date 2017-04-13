@@ -1,0 +1,120 @@
+3.0079733524472	
+0.1468	
+3.0079733524472	
+The data loaded till index 3257	
+data reader in prog....................... 3265/22232 ..................................]  ETA: 1D13h | Step: 7s47ms    
+fetching data
+fetching data
+fetching data
+fetching data
+fetching data
+fetching data
+fetching data
+fetching data
+after data has set up	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+3.1081659495831	
+0.1472	
+3.0580696510151	
+2017-04-07 23:53:48 [INFO ] Training (epoch 0.1472	
+The data loaded till index 3265	
+data reader in prog....................... 3273/22232 ..................................]  ETA: 1D13h | Step: 7s40ms    
+fetching data
+fetching data
+fetching data
+fetching data
+fetching data
+fetching data
+fetching data
+fetching data
+after data has set up	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+4.5857416661456	
+0.1475	
+4.5857416661456	
+The data loaded till index 3273	
+data reader in prog....................... 3281/22232 ..................................]  ETA: 1D12h | Step: 7s28ms    
+fetching data
+fetching data
+fetching data
+fetching data
+fetching data
+fetching data
+fetching data
+fetching data
+after data has set up	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+3.6173277646303	
+0.1479	
+4.101534715388	
+2017-04-07 23:55:43 [INFO ] Training (epoch 0.1479	
+The data loaded till index 3281	
+data reader in prog....................... 3289/22232 ..................................]  ETA: 1D13h | Step: 7s35ms    
+fetching data
+fetching data
+fetching data
+fetching data
+fetching data
+fetching data
+fetching data
+fetching data
+after data has set up	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+2.8889935202897	
+0.1483	
+2.8889935202897	
+The data loaded till index 3289	
+data reader in prog....................... 3297/22232 ....
+fetching data
+fetching data
+fetching data
+fetching data
+fetching data
+fetching data
+fetching data
+fetching data
+after data has set up	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+aft model fwd	
+2.3880394846201	
+0.1486	
+2.6385165024549	
+2017-04-07 23:57:38 [INFO ] Training (epoch 0.1486	
+The data loaded till index 3297	
+data reader in prog....................... 3305/22232 ..................................]  ETA: 1D12h | Step: 7s31ms    
+fetching data
+

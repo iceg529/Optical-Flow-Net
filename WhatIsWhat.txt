@@ -1,0 +1,4 @@
+split.py - load images and flow and write data to hdf5 file
+readData.lua - sample to read data from hdf5 file
+data.lua - same as that of split.py, but written in lua
+train.lua - fetching data from lmdb file created by reference project
