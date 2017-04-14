@@ -14,7 +14,7 @@ if dir_path ~= nil then
   package.path = dir_path .."?.lua;".. package.path
 end
 
-local opTtrain = 'trainData.h5'
+local opTtrain = 'trainData1.h5'
 local opTshuffle = true 
 local opTthreads = 1
 local opTepoch = 1
@@ -180,7 +180,7 @@ local function Train(epoch, dataLoader)
       -- evaluate function for complete mini batch
       for i = 1,im1:size(1) do
         -- estimate f
-        local input = {im1[i],im2[i]}
+        local input = torch.cat(im1[i], im2[i], 1)
         local output = model:forward(input)
         local down5 = nn.SpatialAdaptiveAveragePooling(128, 96):cuda():forward(flow[i])
         print('aft model fwd')

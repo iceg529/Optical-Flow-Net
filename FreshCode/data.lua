@@ -52,11 +52,11 @@ function DBSource:new (db_path, isTrain, shuffle)
             
     -- get number of records
     local myFile = hdf5.open(db_path,'r')
-    local dim = myFile:read('/img1'):dataspaceSize()
-    local n_records = dim[1]
-    self.ImChannels = dim[2]
-    self.ImHeight = dim[3]
-    self.ImWidth = dim[4]
+    local dim = myFile:read('trainData/data0'):dataspaceSize()
+    local n_records = 22232
+    self.ImChannels = 3
+    self.ImHeight = dim[2]
+    self.ImWidth = dim[3]
     self.FlowChannels = 2
     myFile:close()
     -- store DB info
@@ -111,9 +111,10 @@ function DBSource:hdf5_getSample(shuffle)
     end
     
     local myFile = hdf5.open(self.dbs[self.db_id].path, 'r')
-    local im1 = myFile:read('/img1'):partial(unpack({idx,{1,self.ImChannels},{1,self.ImHeight},{1,self.ImWidth}}))
-    local im2 = myFile:read('/img2'):partial(unpack({idx,{1,self.ImChannels},{1,self.ImHeight},{1,self.ImWidth}}))
-    local flow = myFile:read('/flow'):partial(unpack({idx,{1,self.FlowChannels},{1,self.ImHeight},{1,self.ImWidth}}))
+    local concatData = myFile:read('trainData/data' .. idx):all()
+    local im1 = concatData:sub(1,3)
+    local im2 = concatData:sub(4,6)
+    local flow = concatData:sub(7,8)
     myFile:close()
     
     self.cursor = self.cursor + 1
@@ -143,7 +144,7 @@ function DBSource:nextBatch (batchSize, idx)
         end
         return t
     end
-
+    
     for i=1,batchSize do
         -- get next sample
         local im1, im2, flow = self:getSample(self.shuffle, idx + i - 1)

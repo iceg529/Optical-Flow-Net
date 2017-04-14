@@ -6,11 +6,10 @@ function getModel()
   
   local outputs = {}
   --table.insert(inputs, nn.Identity()())
-  local img1In = nn.Identity()()
-  local img2In = nn.Identity()()
+  local imgIn = nn.Identity()()
 --  local flowIn = nn.Identity()()
-  local inputs = {img1In, img2In}
-  local imgIn = nn.JoinTable(2)({img1In, img2In})
+  local inputs = {imgIn}
+
   -- stage 1 : filter bank -> squashing -> filter bank -> squashing
   local h1 = imgIn - nn.SpatialConvolution(6, 64, 7, 7, 2, 2, 3, 3)
                    - nn.ReLU()
@@ -48,7 +47,7 @@ function getModel()
   local DeCon1  = h5 - nn.SpatialFullConvolution(1024, 512, 4, 4, 2, 2, 1, 1)
                      - nn.ReLU()
 
-  local ConCat1 = nn.JoinTable(2)({h4, Con1_up, DeCon1})
+  local ConCat1 = nn.JoinTable(1)({h4, Con1_up, DeCon1})
 
   -- Deconvolution and Concatnate stage 2 
   local Con2    = ConCat1 - nn.SpatialConvolution(1026, 2, 3, 3, 1, 1, 1, 1)
@@ -57,7 +56,7 @@ function getModel()
   local DeCon2  = ConCat1 - nn.SpatialFullConvolution(1026, 256, 4, 4, 2, 2, 1, 1)
                           - nn.ReLU()
 
-  local ConCat2 = nn.JoinTable(2)({h3, Con2_up, DeCon2})
+  local ConCat2 = nn.JoinTable(1)({h3, Con2_up, DeCon2})
 
   -- Deconvolution and Concatnate stage 3 
   local Con3    = ConCat2 - nn.SpatialConvolution(770, 2, 3, 3, 1, 1, 1, 1)
@@ -66,7 +65,7 @@ function getModel()
   local DeCon3  = ConCat2 - nn.SpatialFullConvolution(770, 128, 4, 4, 2, 2, 1, 1)
                           - nn.ReLU()
 
-  local ConCat3 = nn.JoinTable(2)({h2, Con3_up, DeCon3})
+  local ConCat3 = nn.JoinTable(1)({h2, Con3_up, DeCon3})
 
   -- Deconvolution and Concatnate stage 4 
   local Con4    = ConCat3 - nn.SpatialConvolution(386, 2, 3, 3, 1, 1, 1, 1)
@@ -75,7 +74,7 @@ function getModel()
   local DeCon4  = ConCat3 - nn.SpatialFullConvolution(386, 64, 4, 4, 2, 2, 1, 1)
                           - nn.ReLU()
 
-  local ConCat4 = nn.JoinTable(2)({h1, Con4_up, DeCon4})
+  local ConCat4 = nn.JoinTable(1)({h1, Con4_up, DeCon4})
 
   -- Final Convolution stage
   local Con5    = ConCat4 - nn.SpatialConvolution(194, 2, 3, 3, 1, 1, 1, 1)
