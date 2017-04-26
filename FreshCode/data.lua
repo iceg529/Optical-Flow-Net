@@ -52,11 +52,17 @@ function DBSource:new (db_path, isTrain, shuffle)
             
     -- get number of records
     local myFile = hdf5.open(db_path,'r')
-    local dim = myFile:read('trainData/data0'):dataspaceSize()
-    local n_records = 22232
+    local dim, n_records
+    if isTrain then
+    	dim = myFile:read('/data8'):dataspaceSize()
+    	n_records = 22232
+    else
+        dim = myFile:read('/data1'):dataspaceSize()
+    	n_records = 640
+    end
     self.ImChannels = 3
-    self.ImHeight = dim[2]
-    self.ImWidth = dim[3]
+    self.ImHeight = dim[3]
+    self.ImWidth = dim[4]
     self.FlowChannels = 2
     myFile:close()
     -- store DB info
@@ -74,7 +80,7 @@ function DBSource:new (db_path, isTrain, shuffle)
     -- set pointers to HDF5-specific functions
     self.getSample = self.hdf5_getSample
     self.reset = self.hdf5_reset
-    
+    self.batchSize = nil
     logmessage.display(0,'Image channels are ' .. self.ImChannels .. ', Image width is ' .. self.ImWidth .. ' and Image height is ' .. self.ImHeight)
 
     self.train = isTrain
@@ -95,26 +101,31 @@ function DBSource:inputTensorShape()
 end
 
 -- Derived class method getSample (HDF5 flavour)
-function DBSource:hdf5_getSample(shuffle)
+function DBSource:hdf5_getSample(shuffle, indx)
     if not self.db_id or self.cursor>self.dbs[self.db_id].records then
         self.db_id = self.db_id or 0
         assert(self.db_id < #self.dbs, "Trying to read more records than available")
         self.db_id = self.db_id + 1        
         self.cursor = 1
-    end
+    end     
 
-    local idx
-    if shuffle then
-        idx = math.max(1,torch.ceil(torch.rand(1)[1] * self.dbs[self.db_id].records))
-    else
-        idx = self.cursor
-    end
+    local idx = indx
+--    if shuffle then
+--        idx = math.max(1,torch.ceil(torch.rand(1)[1] * (self.dbs[self.db_id].records)*(1/8)))
+--    else
+--        idx = self.cursor
+--    end
     
+    if self.train then
+      --idx = idx*8 -- multiplied by 8 because data stored with keyvalues in multiples of 8 , change it if dataset key values are fixed
+      idx = idx + 7 -- similar reason
+    end
     local myFile = hdf5.open(self.dbs[self.db_id].path, 'r')
-    local concatData = myFile:read('trainData/data' .. idx):all()
-    local im1 = concatData:sub(1,3)
-    local im2 = concatData:sub(4,6)
-    local flow = concatData:sub(7,8)
+    local concatData = myFile:read('/data' .. idx):all()
+    local im1 = concatData:sub(1,self.batchSize,1,3)
+    local im2 = concatData:sub(1,self.batchSize,4,6)
+    local flow = concatData:sub(1,self.batchSize,7,8)
+    --print('/data' .. idx)
     myFile:close()
     
     self.cursor = self.cursor + 1
@@ -124,8 +135,8 @@ end
 -- Derived class method nextBatch
 -- Parameters:
 -- @param batchSize (int): Number of samples to load
--- @param idx (int): Current index within database
-function DBSource:nextBatch (batchSize, idx)
+-- @param indx (int): Current index within database
+function DBSource:nextBatch (batchSize, indx)
 
     local im1Batch, im2Batch, flowBatch
 
@@ -144,26 +155,8 @@ function DBSource:nextBatch (batchSize, idx)
         end
         return t
     end
-    
-    for i=1,batchSize do
-        -- get next sample
-        local im1, im2, flow = self:getSample(self.shuffle, idx + i - 1)
-        print('fetching data')
-        -- create batch tensors if not already done
-        if not im1Batch then
-            im1Batch = createBatchTensor(im1, batchSize)
-        end
-        if not im2Batch then
-            im2Batch = createBatchTensor(im1, batchSize)
-        end
-        if not flowBatch then
-            flowBatch = createBatchTensor(flow, batchSize)
-        end
-
-        im1Batch[i] = im1
-        im2Batch[i] = im2
-        flowBatch[i] = flow
-    end
+    self.batchSize = batchSize    
+    im1Batch, im2Batch, flowBatch = self:getSample(self.shuffle, indx)
 
     return im1Batch, im2Batch, flowBatch
 end
@@ -257,7 +250,10 @@ function DataLoader:scheduleNextBatch(batchSize, dataIdx, dataTable)
     -- send reader thread a request to load a batch from the training DB
     self.threadPool:addjob(
                 function()
-                    -- executes in reader thread
+                    if dataIdx == 1 then
+                        db:reset()
+                    end
+		    -- executes in reader thread
 		    print('data reader in prog...')
                     if db then
                         in1, in2, out =  db:nextBatch(batchSize, dataIdx)
