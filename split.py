@@ -34,40 +34,59 @@ def writeTrainData():
 	img1List = open("Train_Img1.list").readlines()
 	img2List = open("Train_Img2.list").readlines()
 	flowList = open("Train_Flow.list").readlines()
+	j = 0
+	batInd = 1
+	X_data = np.empty([8, 8, 384, 512])
 	for i in trainNum:
 		print(i)
-		img1ToRead = np.transpose(np.asarray(misc.imread(str(img1List[i].split()[0]))), (2,0,1))
-		img2ToRead = np.transpose(np.asarray(misc.imread(str(img2List[i].split()[0]))), (2,0,1))
-		flowToRead = np.asarray(readFloToFile(str(flowList[i].split()[0])))
-		print(img1ToRead.shape)
-		print(img2ToRead.shape)
-		print(flowToRead.shape)
-		X_data = np.concatenate((img1ToRead, img2ToRead, flowToRead), axis=0)
-		print(X_data.shape)
-		dSetName = "trainData/data"+str(i)
-		f.create_dataset(dSetName, data=X_data, compression='gzip', compression_opts=9)
+		X_data[j, :3] = np.transpose(np.asarray(misc.imread(str(img1List[i].split()[0]))), (2,0,1))
+		X_data[j, [3,4,5]] = np.transpose(np.asarray(misc.imread(str(img2List[i].split()[0]))), (2,0,1))
+		X_data[j, 6:] = np.asarray(readFloToFile(str(flowList[i].split()[0])))
+		if j == 7:
+			print(X_data.shape)
+			dSetName = "/data"+str(batInd)
+			f.create_dataset(dSetName, data=X_data, compression='gzip', compression_opts=9)
+			j = 0
+		else:
+			j = j+1
+		batInd = batInd +1 #remember to shift this to abov if statement to fix the key name issues
+	print batInd
 	
   	f.close()
 
 def writeTestData():
-	f = h5py.File("testData.h5", 'w')		    
+	print('writing to file ...')
+	f = h5py.File("testData.h5", 'r+')
+	img1List = open("Test_Img1.list").readlines()
+	img2List = open("Test_Img2.list").readlines()
+	flowList = open("Test_Flow.list").readlines()
+	j = 0
+	batInd = 1
+	X_data = np.empty([640, 8, 384, 512])
+	for i in testNum:
+		print(i)
+		X_data[j, :3] = np.transpose(np.asarray(misc.imread(str(img1List[i].split()[0]))), (2,0,1))
+		X_data[j, [3,4,5]] = np.transpose(np.asarray(misc.imread(str(img2List[i].split()[0]))), (2,0,1))
+		X_data[j, 6:] = np.asarray(readFloToFile(str(flowList[i].split()[0])))
+		if j == 639:
+			print(X_data.shape)
+			dSetName = "/data"+str(batInd)
+			f.create_dataset(dSetName, data=X_data, compression='gzip', compression_opts=9)
+			j = 0
+		else:
+			j = j+1
+	
+  	f.close()
 
-	imData1 = writeToFile("Test_Img1.list",'true')
-	#f.create_dataset("img1", data=finalData, compression='gzip', compression_opts=9)
-
-	imData2 = writeToFile("Test_Img2.list",'true')
-	#f.create_dataset("img2", data=finalData, compression='gzip', compression_opts=9)
-
-	flowData = writeToFile("Test_Flow.list",'false')
-	#f.create_dataset("flow", data=finalData, compression='gzip', compression_opts=9)
-  	finalData = np.concatenate((imData1, imData2, flowData), axis=1)
-  	print(finalData.shape)
-  	f.create_dataset("data", data=finalData, compression='gzip', compression_opts=9)
-	f.close()
-
+def sampleForColorCoding():
+	print('writing to file ...')
+	f = h5py.File("FreshCode/sampleForColorCoding2.h5", 'w')
+	data1 = np.asarray(readFloToFile('FreshCode/Evaluate/flownets-pred-0000000.flo'))
+	f.create_dataset("/data", data=data1)
 
 #writeTestData()
-writeTrainData()
+#writeTrainData()
+sampleForColorCoding()
 
 
 
