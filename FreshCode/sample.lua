@@ -8,18 +8,21 @@ require 'nn'
 require 'cunn'
 require 'cutorch'
 require 'optim'
+require 'AvgEndPointError' -- custom cost function
 
 local dir_path = debug.getinfo(1,"S").source:match[[^@?(.*[\/])[^\/]-$]]
 if dir_path ~= nil then
   package.path = dir_path .."?.lua;".. package.path
 end
 
-local opTtrain = 'trainData1.h5'
-local opTshuffle = true 
-local opTthreads = 1
-local opTepoch = 1
+local opTtrain = 'trainData2.h5'
+local opTval = 'testData.h5'
+local opTshuffle = false 
+local opTthreads = 2
+local opTepoch = 50
 local opTsnapshotInterval = 10
 local opTsave = "logFiles/"
+profiler = xlua.Profiler(false, true)
 
 require 'logmessage'
 
@@ -44,7 +47,7 @@ require 'model'
 local trainDataLoader, trainSize, inputTensorShape
 local valDataLoader, valSize
 
-local num_threads_data_loader = 1
+local num_threads_data_loader = 2
 
 
 -- create data loader for training dataset
@@ -59,17 +62,61 @@ trainDataLoader = DataLoader:new(
 trainSize, inputTensorShape = trainDataLoader:getInfo()
 logmessage.display(0,'found ' .. trainSize .. ' images in train db' .. opTtrain)
 
+-- create data loader for validation dataset
+valDataLoader = DataLoader:new(
+      1, -- num threads
+      package.path,
+      opTval,
+      false, -- train
+      opTshuffle
+)
+-- retrieve info from train DB (number of records and shape of input tensors)
+valSize, valInputTensorShape = valDataLoader:getInfo()
+logmessage.display(0,'found ' .. valSize .. ' images in train db' .. opTval)
+
+local valData = {}
+if valDataLoader:acceptsjob() then
+  valDataLoader:scheduleNextBatch(640, 1, valData, true)
+end
+valDataLoader:waitNext()
+
+-- validation function
+local function validation(model,valData,criterion)
+  model:evaluate()
+  local valErr = 0
+  --local valData = {} 
+    
+  print(valData.im1:size())
+  for i = 1,valData.im1:size(1) do
+    -- estimate f
+    local input = torch.cat(valData.im1[i], valData.im2[i], 1)
+    input = input:cuda()
+    local output = model:forward(input)
+    local flInput = valData.flow[i]
+    flInput = flInput:cuda()
+    --local down5 = nn.SpatialAdaptiveAveragePooling(128, 96):cuda():forward(flInput)
+    local err = criterion:forward(output, flInput)
+    valErr = valErr + err
+  end
+  
+  valErr = valErr / valData.im1:size(1)
+  collectgarbage()
+  return valErr
+end
 ----------------------------------------------------------------------
 
 -- Log results to files
 trainLogger = optim.Logger(paths.concat(opTsave, 'train.log'))
+trainLogger:setNames{'Training error', 'Validation error'}
+trainLogger:style{'+-', '+-'}
+trainLogger:display(false)
 testLogger = optim.Logger(paths.concat(opTsave, 'test.log'))
 
 -- Retrieve parameters and gradients:
 -- this extracts and flattens all the trainable parameters of the mode into a 1-dim vector
 local model = getModel()
 model = model:cuda()
-local criterion = nn.SmoothL1Criterion()
+local criterion = nn.AvgEndPointError()
 criterion = criterion:cuda()
 if model then
    parameters,gradParameters = model:getParameters()
@@ -102,8 +149,8 @@ end
 -- can be separate batch sizes for the training and validation
 -- sets)
 local trainBatchSize = 8
-local logging_check = 10
-local next_snapshot_save = 0.05
+local logging_check = 11116 -- 8 splits of training data(22232/8)
+local next_snapshot_save = 0.3
 local snapshot_prefix = 'flownet'
 
 ----------------------
@@ -116,8 +163,15 @@ while tmp_batchsize <= trainSize do
 end
 logmessage.display(0,'While logging, epoch value will be rounded to ' .. epoch_round .. ' significant digits')
 
--- Train function
-local function Train(epoch, dataLoader)
+------------------------------
+
+local epoch = 1
+
+logmessage.display(0,'started training the model')
+
+while epoch<=opTepoch do
+  local time = sys.clock()  
+  ------------------------------
   local NumBatches = 0
   local curr_images_cnt = 0
   local loss_sum = 0
@@ -132,9 +186,11 @@ local function Train(epoch, dataLoader)
 
   local t = 1
   while t <= trainSize do
+    model:training()
     -- disp progress
     xlua.progress(t, trainSize)
-    local time = sys.clock()
+    local time2 = sys.clock()
+    profiler:start('pre-fetch')
     -- prefetch data thread
     --------------------------------------------------------------------------------
     while trainDataLoader:acceptsjob() do      
@@ -149,7 +205,7 @@ local function Train(epoch, dataLoader)
     -- wait for next data loader job to complete
     trainDataLoader:waitNext()
     --------------------------------------------------------------------------------
-    print(sys.clock() - time)
+    profiler:lap('pre-fetch')
     -- get data from last load job
     local thisBatchSize = data.batchSize
     im1 = data.im1
@@ -159,10 +215,8 @@ local function Train(epoch, dataLoader)
     im1 = im1:cuda()
     im2 = im2:cuda()
     flow = flow:cuda()
-    
-    if math.fmod(NumBatches,10)==0 then
-      collectgarbage()
-    end
+        
+    profiler:start('training process')
     ------------------------------------------------------------------------------------------------------------------------------
     -- create closure to evaluate f(X) and df/dX
     local feval = function(x)
@@ -182,12 +236,13 @@ local function Train(epoch, dataLoader)
         -- estimate f
         local input = torch.cat(im1[i], im2[i], 1)
         local output = model:forward(input)
-        local down5 = nn.SpatialAdaptiveAveragePooling(128, 96):cuda():forward(flow[i])
-        print('aft model fwd')
-        local err = criterion:forward(output, down5)
+        --local down5 = nn.SpatialAdaptiveAveragePooling(128, 96):cuda():forward(flow[i]) -- upsampled the prediction flow
+        --print('aft model fwd')
+	local grdTruth = flow[i]:cuda()
+        local err = criterion:forward(output, grdTruth)
         f = f + err
         -- estimate df/dW
-        local df_do = criterion:backward(output, down5)
+        local df_do = criterion:backward(output, grdTruth)
         model:backward(input, df_do)
       end
 
@@ -205,28 +260,39 @@ local function Train(epoch, dataLoader)
     config = config or {learningRate = 0.0001,
                    weightDecay = 0.0004,
                    momentum = 0.9,
-                   learningRateDecay = 5e-7}
+                   learningRateDecay = 0}
                  
     _, train_err = optim.adam(feval, parameters, config)
     -----------------------------------------------------------------------------------------------------------------------------
-    
+    profiler:lap('training process')
 
     -------------------------------------BLOCK TO CHECK LATER---------------------------------------------------------------------    
-    
+    profiler:start('logging process')
     -- adding the loss values of each mini batch and also maintaining the counter for number of batches, so that average loss value can be found at the time of logging details
     loss_sum = loss_sum + train_err[1]
     loss_batches_cnt = loss_batches_cnt + 1
     
     local current_epoch = (epoch-1)+round((math.min(t+trainBatchSize-1,trainSize))/trainSize, epoch_round)
+    local loggerCnt = 0
     print(current_epoch)
+    print(curr_images_cnt)
+    print(loggerCnt)
     -- log details on first iteration, or when required number of images are processed
     curr_images_cnt = curr_images_cnt + thisBatchSize
-    print(loss_sum/loss_batches_cnt)
+    
+    -- update logger/plot
     if (epoch==1 and t==1) or curr_images_cnt >= logging_check then      
-      logmessage.display(0, 'Training (epoch ' .. current_epoch)
+      local avgLoss = loss_sum / loss_batches_cnt      
+      local avgValErr = validation(model, valData, criterion)
+      
+      trainLogger:add{avgLoss, avgValErr}
+      trainLogger:plot()
+      
+      --logmessage.display(0, 'Training (epoch ' .. current_epoch)
       curr_images_cnt = 0 -- For accurate values we may assign curr_images_cnt % logging_check to curr_images_cnt, instead of 0
       loss_sum = 0
       loss_batches_cnt = 0
+      loggerCnt = loggerCnt + 1
     end
 
     if current_epoch >= next_snapshot_save then
@@ -237,41 +303,22 @@ local function Train(epoch, dataLoader)
     -------------------------------------------------------------------------------------------------------------------------------
     
     t = t + thisBatchSize
-    print('The data loaded till index ' .. data.indx)  
+    profiler:lap('logging process')
+    --print('The data loaded till index ' .. data.indx)
+    if math.fmod(NumBatches,10)==0 then
+      collectgarbage()
+    end
   end
-end
-
-------------------------------
-
-local epoch = 1
-
-logmessage.display(0,'started training the model')
-
-while epoch<=opTepoch do
-  local time = sys.clock()
-  
-  Train(epoch, trainDataLoader)
-  --------------------------
+  ------------------------------
   -- time taken
   time = sys.clock() - time
-  time = time / trainSize
-  print("==> time to learn for 1 eopch = " .. (time*1000) .. 'ms')
-
-  -- update logger/plot
---  trainLogger:add{['% mean class accuracy (train set)'] = confusion.totalValid * 100}
---  if opt.plot then
---    trainLogger:style{['% mean class accuracy (train set)'] = '-'}
---    trainLogger:plot()
---  end
-
-  -- save/log current net
---  local filename = paths.concat(opt.save, 'model.net')
---  os.execute('mkdir -p ' .. sys.dirname(filename))
---  print('==> saving model to '..filename)
---  torch.save(filename, model)
-  --------------------------
-  
+  --time = time / trainSize
+  print("==> time to learn for 1 epoch = " .. (time) .. 'ms')
+   
   epoch = epoch+1
+  if epoch == opTepoch then
+    trainLogger:display(true)
+  end
 end     
 
 -- if required, save snapshot at the end
@@ -280,7 +327,7 @@ if opTepoch > last_snapshot_save_epoch then
 end
 
 -- close databases
-trainDataLoader:close()
+-- trainDataLoader:close() uncomment if needed
 
 -- enforce clean exit
 os.exit(0)
