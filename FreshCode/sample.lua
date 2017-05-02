@@ -19,7 +19,7 @@ local opTtrain = 'trainData2.h5'
 local opTval = 'testData.h5'
 local opTshuffle = false 
 local opTthreads = 2
-local opTepoch = 50
+local opTepoch = 1--50
 local opTsnapshotInterval = 10
 local opTsave = "logFiles/"
 profiler = xlua.Profiler(false, true)
@@ -82,7 +82,7 @@ valDataLoader:waitNext()
 
 -- validation function
 local function validation(model,valData,criterion)
-  model:evaluate()
+  --model:evaluate()
   local valErr = 0
   --local valData = {} 
     
@@ -114,9 +114,11 @@ testLogger = optim.Logger(paths.concat(opTsave, 'test.log'))
 
 -- Retrieve parameters and gradients:
 -- this extracts and flattens all the trainable parameters of the mode into a 1-dim vector
-local model = getModel()
+--local model = getModel()
+local model = require('weight-init')(getModel(), 'kaiming')
+--local model = torch.load('logFiles/flownet_90_Model.t7')
 model = model:cuda()
-local criterion = nn.AvgEndPointError()
+local criterion = nn.AvgEndPointError() --SmoothL1Criterion
 criterion = criterion:cuda()
 if model then
    parameters,gradParameters = model:getParameters()
@@ -149,7 +151,7 @@ end
 -- can be separate batch sizes for the training and validation
 -- sets)
 local trainBatchSize = 8
-local logging_check = 11116 -- 8 splits of training data(22232/8)
+local logging_check = 2779 --11116 -- 8 splits of training data(22232/8)
 local next_snapshot_save = 0.3
 local snapshot_prefix = 'flownet'
 
@@ -164,7 +166,7 @@ end
 logmessage.display(0,'While logging, epoch value will be rounded to ' .. epoch_round .. ' significant digits')
 
 ------------------------------
-
+local loggerCnt = 0
 local epoch = 1
 
 logmessage.display(0,'started training the model')
@@ -180,13 +182,13 @@ while epoch<=opTepoch do
   local im1, im2, flow
   local dataLoaderIdx = 1
   local data = {}
-
+  
   print('==> doing epoch on training data:')
   print("==> online epoch # " .. epoch .. ' [batchSize = ' .. trainBatchSize .. ']')
 
   local t = 1
   while t <= trainSize do
-    model:training()
+    --model:training()
     -- disp progress
     xlua.progress(t, trainSize)
     local time2 = sys.clock()
@@ -236,13 +238,14 @@ while epoch<=opTepoch do
         -- estimate f
         local input = torch.cat(im1[i], im2[i], 1)
         local output = model:forward(input)
-        --local down5 = nn.SpatialAdaptiveAveragePooling(128, 96):cuda():forward(flow[i]) -- upsampled the prediction flow
+        local down5 = nn.SpatialAdaptiveAveragePooling(128, 96):cuda():forward(flow[i]) -- upsampled the prediction flow
         --print('aft model fwd')
+        down5 = down5:cuda()
 	local grdTruth = flow[i]:cuda()
-        local err = criterion:forward(output, grdTruth)
+        local err = criterion:forward(output, down5) --grdTruth
         f = f + err
         -- estimate df/dW
-        local df_do = criterion:backward(output, grdTruth)
+        local df_do = criterion:backward(output, down5) --grdTruth
         model:backward(input, df_do)
       end
 
@@ -260,7 +263,7 @@ while epoch<=opTepoch do
     config = config or {learningRate = 0.0001,
                    weightDecay = 0.0004,
                    momentum = 0.9,
-                   learningRateDecay = 0}
+                   learningRateDecay = 3e-5}
                  
     _, train_err = optim.adam(feval, parameters, config)
     -----------------------------------------------------------------------------------------------------------------------------
@@ -273,9 +276,9 @@ while epoch<=opTepoch do
     loss_batches_cnt = loss_batches_cnt + 1
     
     local current_epoch = (epoch-1)+round((math.min(t+trainBatchSize-1,trainSize))/trainSize, epoch_round)
-    local loggerCnt = 0
+    
     print(current_epoch)
-    print(curr_images_cnt)
+    
     print(loggerCnt)
     -- log details on first iteration, or when required number of images are processed
     curr_images_cnt = curr_images_cnt + thisBatchSize
@@ -283,7 +286,7 @@ while epoch<=opTepoch do
     -- update logger/plot
     if (epoch==1 and t==1) or curr_images_cnt >= logging_check then      
       local avgLoss = loss_sum / loss_batches_cnt      
-      local avgValErr = validation(model, valData, criterion)
+      local avgValErr = 0 -- validation(model, valData, criterion)
       
       trainLogger:add{avgLoss, avgValErr}
       trainLogger:plot()
@@ -295,7 +298,7 @@ while epoch<=opTepoch do
       loggerCnt = loggerCnt + 1
     end
 
-    if current_epoch >= next_snapshot_save then
+    if current_epoch >= next_snapshot_save or current_epoch == opTepoch then
       saveModel(model, opTsave, snapshot_prefix, current_epoch)
       next_snapshot_save = (round(current_epoch/opTsnapshotInterval) + 1) * opTsnapshotInterval -- To find next epoch value that exactly divisible by opt.snapshotInterval
       last_snapshot_save_epoch = current_epoch
@@ -304,7 +307,7 @@ while epoch<=opTepoch do
     
     t = t + thisBatchSize
     profiler:lap('logging process')
-    --print('The data loaded till index ' .. data.indx)
+    print('The data loaded till index ' .. data.indx)
     if math.fmod(NumBatches,10)==0 then
       collectgarbage()
     end

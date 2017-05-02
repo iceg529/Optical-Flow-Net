@@ -60,11 +60,17 @@ function DBSource:new (db_path, isTrain, shuffle)
         dim = myFile:read('/data1'):dataspaceSize()
     	n_records = 640
     end
+    myFile:close()
+    
+    local meanFile = hdf5.open('meanData.h5','r')
+    meanData = meanFile:read('/data'):all()     
+    meanFile:close()
+
     self.ImChannels = 3
     self.ImHeight = dim[3]
     self.ImWidth = dim[4]
     self.FlowChannels = 2
-    myFile:close()
+    
     -- store DB info
     self.dbs[#self.dbs + 1] = {
         path = db_path,
@@ -157,7 +163,16 @@ function DBSource:nextBatch (batchSize, indx)
     end
     self.batchSize = batchSize    
     im1Batch, im2Batch, flowBatch = self:getSample(self.shuffle, indx)
-
+    local temp = torch.Tensor(1,3,384,512)
+    local temp2 = torch.Tensor(1,3,384,512)
+    temp[1] = meanData[1]
+    temp2[1] = meanData[3]
+    im1Batch = im1Batch - temp:expandAs(im1Batch)
+    im1Batch:cdiv(temp2:expandAs(im1Batch))
+    temp[1] = meanData[2]
+    temp2[1] = meanData[4]
+    im2Batch = im2Batch - temp:expandAs(im2Batch)
+    im2Batch:cdiv(temp2:expandAs(im2Batch))
     return im1Batch, im2Batch, flowBatch
 end
 
@@ -254,7 +269,7 @@ function DataLoader:scheduleNextBatch(batchSize, dataIdx, dataTable)
                         db:reset()
                     end
 		    -- executes in reader thread
-		    print('data reader in prog...')
+		    --print('data reader in prog...')
                     if db then
                         in1, in2, out =  db:nextBatch(batchSize, dataIdx)
                         return batchSize, in1, in2, out, dataIdx
@@ -269,7 +284,7 @@ function DataLoader:scheduleNextBatch(batchSize, dataIdx, dataTable)
                     dataTable.im2 = in2
                     dataTable.flow = out
 		    dataTable.indx = indx
-		    print('after data has set up')
+		    --print('after data has set up')
                 end
             )
 end

@@ -84,10 +84,45 @@ def sampleForColorCoding():
 	data1 = np.asarray(readFloToFile('FreshCode/Evaluate/flownets-pred-0000000.flo'))
 	f.create_dataset("/data", data=data1)
 
+def createMeanImg():
+	f = h5py.File("meanData.h5", 'w')
+	img1List = open("Train_Img1.list").readlines()
+	img2List = open("Train_Img2.list").readlines()
+        meanIm1 = np.zeros((3, 384, 512))
+	meanIm2 = np.zeros((3, 384, 512))
+	meanSqredIm1 = np.zeros((3, 384, 512))
+	meanSqredIm2 = np.zeros((3, 384, 512))
+	data1 = np.empty([4, 3, 384, 512])
+	temp = np.empty([4, 3, 384, 512])
+	for i in range(0, 22231):
+		meanIm1 = meanIm1 + np.transpose(np.asarray(misc.imread(str(img1List[i].split()[0]))), (2,0,1))
+		meanIm2 = meanIm2 + np.transpose(np.asarray(misc.imread(str(img2List[i].split()[0]))), (2,0,1))
+		print(i)
+	 			
+        meanIm1 = meanIm1/22232
+        meanIm2 = meanIm2/22232
+
+	for i in range(0, 22231):
+		temp = np.transpose(np.asarray(misc.imread(str(img1List[i].split()[0]))), (2,0,1))
+		meanSqredIm1 = meanSqredIm1 + np.square(np.subtract(temp,meanIm1))
+		temp = np.transpose(np.asarray(misc.imread(str(img2List[i].split()[0]))), (2,0,1))
+		meanSqredIm2 = meanSqredIm2 + np.square(np.subtract(temp,meanIm2))
+		print(i)
+
+	meanSqredIm1 = meanSqredIm1/22232
+        meanSqredIm2 = meanSqredIm2/22232
+	print((meanSqredIm1 >= 0).all())
+	print((meanSqredIm2 >= 0).all())
+	data1[0] = meanIm1
+	data1[1] = meanIm2
+	data1[2] = np.sqrt(meanSqredIm1)
+	data1[3] = np.sqrt(meanSqredIm2)
+	f.create_dataset("/data", data=data1)
+
 #writeTestData()
 #writeTrainData()
-sampleForColorCoding()
-
+#sampleForColorCoding()
+createMeanImg()
 
 
 
