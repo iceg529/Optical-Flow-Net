@@ -1,9 +1,12 @@
 -- data.lua: script to fetch and preprocess batch data from hdf5 datasets
-
+require 'image'
 require 'torch' -- torch
 require 'nn' -- provides a normalization operator
 require 'utils' -- various utility functions
 require 'hdf5' -- import HDF5 now as it is unsafe to do it from a worker thread
+require 'cunn'
+require 'cutorch'
+
 local threads = require 'threads' -- for multi-threaded data loader
 
 --if color transforms are needed : check_require('image') 
@@ -54,18 +57,14 @@ function DBSource:new (db_path, isTrain, shuffle)
     local myFile = hdf5.open(db_path,'r')
     local dim, n_records
     if isTrain then
-    	dim = myFile:read('/data8'):dataspaceSize()
-    	n_records = 22232
+    	dim = myFile:read('/data1'):dataspaceSize()
+    	n_records = 904 -- 22232 904
     else
         dim = myFile:read('/data1'):dataspaceSize()
-    	n_records = 640
+    	n_records = 640 -- 640 
     end
     myFile:close()
-    
-    local meanFile = hdf5.open('meanData.h5','r')
-    meanData = meanFile:read('/data'):all()     
-    meanFile:close()
-
+        
     self.ImChannels = 3
     self.ImHeight = dim[3]
     self.ImWidth = dim[4]
@@ -122,10 +121,10 @@ function DBSource:hdf5_getSample(shuffle, indx)
 --        idx = self.cursor
 --    end
     
-    if self.train then
+--    if self.train then
       --idx = idx*8 -- multiplied by 8 because data stored with keyvalues in multiples of 8 , change it if dataset key values are fixed
-      idx = idx + 7 -- similar reason
-    end
+--      idx = idx + 7 -- similar reason
+--    end
     local myFile = hdf5.open(self.dbs[self.db_id].path, 'r')
     local concatData = myFile:read('/data' .. idx):all()
     local im1 = concatData:sub(1,self.batchSize,1,3)
@@ -163,16 +162,7 @@ function DBSource:nextBatch (batchSize, indx)
     end
     self.batchSize = batchSize    
     im1Batch, im2Batch, flowBatch = self:getSample(self.shuffle, indx)
-    local temp = torch.Tensor(1,3,384,512)
-    local temp2 = torch.Tensor(1,3,384,512)
-    temp[1] = meanData[1]
-    temp2[1] = meanData[3]
-    im1Batch = im1Batch - temp:expandAs(im1Batch)
-    im1Batch:cdiv(temp2:expandAs(im1Batch))
-    temp[1] = meanData[2]
-    temp2[1] = meanData[4]
-    im2Batch = im2Batch - temp:expandAs(im2Batch)
-    im2Batch:cdiv(temp2:expandAs(im2Batch))
+    
     return im1Batch, im2Batch, flowBatch
 end
 
@@ -279,7 +269,36 @@ function DataLoader:scheduleNextBatch(batchSize, dataIdx, dataTable)
                 end,
                 function(batchSize, in1, in2, out, indx)
                     -- executes in main thread
-                    dataTable.batchSize = batchSize
+                    
+		   --[[ profiler:start('augmentation process')		    
+	 	    ----- augmentation ----------	    
+		    if torch.bernoulli(0.5) == 1 then
+	 	      print('in affine')
+		      local trMax = round(0.2 * in1:size(4))
+		      local trY, trX, theta
+		      local scaledW, scaledH, scaleRand      	      
+
+		      for i = 1,in1:size(1) do
+			trY = torch.random(-trMax,trMax)
+			trX = torch.random(-trMax,trMax)
+			theta = math.rad(torch.random(-17,17))
+			scaleRand = ((torch.uniform() * 0.8) + 1.2) -- range conversion "NewValue = (((OldValue - OldMin) * NewRange) / OldRange) + NewMin"
+			scaledW = round(scaleRand * in1:size(4))
+			scaledH = round(scaleRand * in1:size(3))	
+			
+			in1[i] = image.crop(image.scale(image.rotate(image.translate(in1[i], trX, trY), theta, 'bilinear'), scaledW, scaledH), 'c', 512, 384)
+			in2[i] = image.crop(image.scale(image.rotate(image.translate(in2[i], trX, trY), theta, 'bilinear'), scaledW, scaledH), 'c', 512, 384)
+			out[i] = image.crop(image.scale(image.rotate(image.translate(out[i], trX, trY), theta, 'bilinear'), scaledW, scaledH), 'c', 512, 384)
+						
+			local colorAugParams = {addNoiseSig = torch.uniform(0, 0.04), colFac1 = torch.uniform(0.5, 2), colFac2 = torch.uniform(0.5, 2), colFac3 = torch.uniform(0.5, 2), gamma = torch.uniform(0.7, 1.5), brightnessSigma = 0.2, contrast = torch.uniform(-0.8, 0.4)}
+						
+			in1[i] = colorAugmentation(in1[i],colorAugParams)
+			in2[i] = colorAugmentation(in2[i],colorAugParams)
+		      end
+	  	    end
+		    profiler:lap('augmentation process') ]]--
+
+		    dataTable.batchSize = batchSize
                     dataTable.im1 = in1
                     dataTable.im2 = in2
                     dataTable.flow = out

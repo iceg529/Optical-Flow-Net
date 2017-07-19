@@ -1,0 +1,132 @@
+require 'torch'
+require 'hdf5'
+require 'image'
+require 'nn'
+require 'nngraph'
+require 'cunn'
+require 'cutorch'
+loadfile('../AvgEndPointError.lua')()
+loadfile('../AvgAngularError.lua')()
+loadfile('../utils.lua')()
+
+local myFile = hdf5.open('../trainData.h5', 'r')
+local concatData = myFile:read('/data98'):all()
+local im1 = concatData:sub(1,1,1,3):cuda()
+local im2 = concatData:sub(1,1,4,6):cuda()
+local flow2 = concatData:sub(1,1,7,8):cuda()
+myFile:close()
+
+local meanFile = hdf5.open('../meanData.h5','r')
+meanData = meanFile:read('/data'):all()     
+meanFile:close()
+
+local sampleFile = hdf5.open('../sampleForColorCoding.h5', 'r')
+local img1 = sampleFile:read('/data1'):all()
+local img2 = sampleFile:read('/data2'):all()
+local flow = sampleFile:read('/data3'):all()
+sampleFile:close()
+
+img1 = image.scale(img1,1024,448):cuda()
+img2 = image.scale(img2,1024,448):cuda()
+flow = image.scale(flow,1024,448):cuda()
+
+print('sfdg')
+local meanResized = torch.Tensor(4,3,448,1024)
+meanResized[1] = image.scale(meanData[1],1024,448)
+print('sfdg')
+meanResized[2] = image.scale(meanData[2],1024,448)
+meanResized[3] = image.scale(meanData[3],1024,448)
+meanResized[4] = image.scale(meanData[4],1024,448)
+meanResized = meanResized:cuda()
+--[[img1[1]:copy(im1[1])
+img2[1]:copy(im2[1])
+flow:copy(flow2[1])--]]
+
+--[[img1[1] = image.crop(image.scale(image.rotate(image.translate(img1[1], -20, 30), 0.3, 'bilinear'), 512*2, 384*2), 'c', 512, 384)
+img2[1] = image.crop(image.scale(image.rotate(image.translate(img2[1], -20, 30), 0.3, 'bilinear'), 512*2, 384*2), 'c', 512, 384)
+flow = image.crop(image.scale(image.rotate(image.translate(flow, -20, 30), 0.3, 'bilinear'), 512*2, 384*2), 'c', 512, 384)--]]
+
+local model2 = torch.load('../logFiles/flownetLC6_LR3_165_Model.t7')
+
+local tmpImg1 = torch.Tensor(1,img1:size(1),img1:size(2),img1:size(3)):cuda()
+local tmpImg2 = torch.Tensor(tmpImg1:size()):cuda()
+tmpImg1[1] = img1
+tmpImg2[1] = img2
+--tmpImg, tmpImg2 = normalizeMean(meanResized, tmpImg1, tmpImg2)
+
+local input = torch.cat(tmpImg1[1], tmpImg2[1], 1):cuda() -- change later to im1[1] im2[1]
+local pred = model2:forward(input)
+local module = nn.SpatialUpSamplingBilinear(4):cuda()
+local predFinal = module:forward(pred:cuda())
+
+--[[local tmpM = model2:get(2):cuda()
+local tmppred = tmpM:forward(torch.cat(img1, img2, 1):cuda())
+tmpM = model2:get(4):cuda()
+tmppred = tmpM:forward(tmppred:cuda())
+tmpM = model2:get(6):cuda()
+tmppred = tmpM:forward(tmppred:cuda())
+tmpM = model2:get(8):cuda()
+tmppred = tmpM:forward(tmppred:cuda())
+tmpM = model2:get(10):cuda()
+tmppred = tmpM:forward(tmppred:cuda())
+tmpM = model2:get(12):cuda()
+tmppred = tmpM:forward(tmppred:cuda())
+tmpM = model2:get(14):cuda()
+tmppred = tmpM:forward(tmppred:cuda())
+tmpM = model2:get(16):cuda()
+tmppred4 = tmpM:forward(tmppred:cuda())
+tmpM = model2:get(18):cuda()
+tmppred = tmpM:forward(tmppred4:cuda())
+tmpM = model2:get(20):cuda()
+tmppred = tmpM:forward(tmppred:cuda())
+tmpM = model2:get(22):cuda()
+tmppred2 = tmpM:forward(tmppred:cuda())
+tmpM = model2:get(23):cuda()
+tmppred3 = tmpM:forward(tmppred2:cuda())
+tmpM = model2:get(24):cuda()
+tmppred = tmpM:forward(tmppred:cuda())
+tmpM = model2:get(26):cuda()
+tmppred5 = tmpM:forward({tmppred,tmppred4,tmppred3})
+print(tmppred:size())
+print(tmppred4:size())
+print(tmppred3:size())
+print(tmppred5:size())
+print('sfdg')
+print(model2:get(1).output:size())
+print(model2:get(2).output:size())
+print(model2:get(4).output:size())
+print(model2:get(5).output:size())
+print(model2:get(24).output:size())--]]
+
+torch.save('down.t7',predFinal)
+
+--[[img2[1] = torch.add(img2[1], torch.randn(img2[1]:size())*0.04)
+
+local img3 = img2[1]:clone()
+img3[1]:mul(0.6)
+img3[2]:mul(1.2)
+img3[3]:mul(1.7)
+local factor = img2[1]:sum()/(img3:sum()+0.001)
+img2[1]:mul(factor)
+
+img2[1]:clamp(0,255)
+img2[1]:pow(0.9) --gamma
+--img2[1]:clamp(0,255)
+
+local weightFactor = torch.randn(img2[1]:size()):mul(0.2)
+local lumaTensor = torch.Tensor():resizeAs(img2[1])
+lumaTensor[1] = (image.rgb2yuv(img2[1]))[1]
+lumaTensor[2]:copy(lumaTensor[1])
+lumaTensor[3]:copy(lumaTensor[1])
+lumaTensor:cmul(weightFactor:mul(-1):add(1))
+img2[1]:cmul(weightFactor):add(lumaTensor) -- brightness addition ?? 
+
+local contrastFac = 1-(-0.2)
+local luma = (1 - contrastFac) * (image.rgb2yuv(img2[1]))[1]:mean()
+img2[1]:mul(contrastFac):add(luma)
+
+img2[1]:clamp(0,255) --]]
+
+itorch.image({img1,img2})
+--itorch.image((model2:get(39).weight)[{{},{1},{},{}}])
+itorch.image(model2:get(42).output)

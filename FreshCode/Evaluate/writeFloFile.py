@@ -3,12 +3,15 @@ import torchfile
 import numpy as np
 import matplotlib.pyplot as plt
 
-floFile = 'flow_sample2_pred.flo'
+floFile = 'down.flo' #flow_sample2_pred
 floatCheck = np.float32(202021.25)
-width = np.int32(512) #128
-height = np.int32(384) #96
-flowSample = torchfile.load('flow_sample2_pred.t7')
-flowArray = flowSample.flatten()
+width = np.int32(1024) #128 512  1024
+height = np.int32(448) #96 384  448
+flowSample = torchfile.load('down.t7') #flow_sample2_pred
+flowCh = np.empty([2, 448*1024])
+flowCh[0] = flowSample[0].flatten()
+flowCh[1] = flowSample[1].flatten()
+flowArray = flowCh.flatten('F')
 
 #print(flowArray.shape)
 

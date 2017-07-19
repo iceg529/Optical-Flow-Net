@@ -6,38 +6,108 @@ require 'nngraph'
 require 'cunn'
 require 'cutorch'
 require '../AvgEndPointError'
+require '../AvgAngularError'
+require '../utils'
+require 'xlua'
 
---local myFile = hdf5.open('../trainData2.h5', 'r')
---local concatData = myFile:read('/data8'):all()
---local im1 = concatData:sub(1,1,1,3)
---local im2 = concatData:sub(1,1,4,6)
---local flow = concatData:sub(1,1,7,8)
---myFile:close()
+local myFile = hdf5.open('../trainData.h5', 'r')
+local concatData = myFile:read('/data98'):all()
+local im1 = concatData:sub(1,1,1,3):cuda()
+local im2 = concatData:sub(1,1,4,6):cuda()
+local flow2 = concatData:sub(1,1,7,8):cuda()
+myFile:close()
 
-local img1 = image.load('../../../../FlowNet/dispflownet-release/data/FlyingChairs_examples/0000000-img0.ppm')
-local img2 = image.load('../../../../FlowNet/dispflownet-release/data/FlyingChairs_examples/0000000-img1.ppm')
+
+local chns, lnt
+local function getWeight(chns, lnt)
+   local weights = torch.Tensor(chns,chns,lnt,lnt)
+   local accum_weight = 0
+   local ii, jj, tmpWt
+   local scale = (lnt-1)/2
+   ii = 1
+   for i = -scale,scale,1 do
+     jj = 1
+     for j = -scale,scale,1 do
+       tmpWt = (1 -(torch.abs(i)/(scale+1))) * (1 -(torch.abs(j)/(scale+1)))
+       weights[{ {1},{1},ii,jj }] = tmpWt
+       weights[{ {2},{2},ii,jj }] = tmpWt
+       weights[{ {1},{2},ii,jj }] = 0
+       weights[{ {2},{1},ii,jj }] = 0
+       accum_weight = accum_weight + tmpWt
+       jj = jj + 1
+     end
+     ii = ii + 1
+   end
+  
+   weights:div(accum_weight)
+   return weights
+end
+
+local meanFile = hdf5.open('../meanData.h5','r')
+meanData = meanFile:read('/data'):all():cuda()     
+meanFile:close()
+
+local img1 = torch.Tensor(1,3,384,512)
+local img2 = torch.Tensor(1,3,384,512)
 
 local caffePredFile = hdf5.open('../sampleForColorCoding2.h5', 'r')
 local caffePredFlow = caffePredFile:read('/data'):all():cuda()
 caffePredFile:close()
 
 local sampleFile = hdf5.open('../sampleForColorCoding.h5', 'r')
-local flow2 = sampleFile:read('/data'):all():cuda()
+img1[1]:copy(sampleFile:read('/data1'):all()):cuda()
+img2[1]:copy(sampleFile:read('/data2'):all()):cuda()
+
+local flow = sampleFile:read('/data3'):all():cuda()
+local epicflow = sampleFile:read('/data4'):all():cuda()
 sampleFile:close()
 
-local model2 = torch.load('../logFiles/flownet_50_Model.t7')
+--uncomment these
+--img1[1]:copy(im1[1])
+--img2[1]:copy(im2[1])
+--flow:copy(flow2[1])
+
+local model2 = torch.load('../logFiles/flownetLC6_LR3_165_Model.t7') --flownetLC_LR3_200_Model.t7
 model2:evaluate()
-local input = torch.cat(img1, img2, 1):cuda() -- change later to im1[1] im2[1]
+
+
+img1, img2 = normalizeMean(meanData, img1, img2)
+
+local input = torch.cat(img1[1], img2[1], 1):cuda() -- change later to im1[1] im2[1]
 local pred = model2:forward(input)
 
 local module = nn.SpatialUpSamplingBilinear(4):cuda()
 local predFinal = module:forward(pred:cuda())
+local predZero = torch.Tensor(2,384,512):fill(0.2):cuda()
+print(torch.min(pred))
+print(torch.max(pred))
 
-print(flow2:size())
-print(predFinal:size())
-local lossFn = nn.AvgEndPointError():cuda()  --AvgEndPointError or MSECriterion
-local errr = lossFn:forward(flow2, flow2)
+local lossFn = nn.AvgAngularError():cuda()  --AvgEndPointError or MSECriterion or AvgAngularError
+
+local temp = torch.Tensor(2,384,512):copy(flow)
+local down5 =torch.Tensor(2,96,128)
+local ti =-3
+local tj =-3
+for i = 1, 96 ,1 do
+  ti = ti+4
+  tj = -3
+  for j = 1, 128 ,1 do
+    tj = tj+4
+    down5[1][i][j] =  temp[1][ti][tj]
+    down5[2][i][j] =  temp[2][ti][tj]
+  end
+end
+
+local mod = nn.SpatialConvolution(2,2, 7, 7, 4,4,3,3) -- nn.SpatialConvolution(2,2,1, 1, 4, 4, 0, 0)
+mod.weight = getWeight(2, 7)
+mod.bias = torch.Tensor(2):fill(0)
+mod = mod:cuda()
+local down5 = mod:forward(flow:cuda()) --nn.SpatialAveragePooling(9, 9, 4, 4, 4, 4)
+local up5 = nn.SpatialUpSamplingBilinear({oheight=384, owidth=512}):cuda():forward(predFinal:cuda())
+
+local errr = lossFn:forward(epicflow, flow) --caffePredFlow pred down5 predFinal flow
 print('Error between prediction and Ground truth  ' .. errr)
+print(predFinal[{{},{1,3},{1,3}}])
 
 -- Save images, ground truth flow and predicted flow ----
 
@@ -57,3 +127,4 @@ print('Error between prediction and Ground truth  ' .. errr)
 
 --torch.save('flow_sample2.t7',flow)
 --torch.save('flow_sample2_pred.t7',predFinal)
+torch.save('down.t7',predFinal) --predFinal flow

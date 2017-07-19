@@ -78,7 +78,7 @@ function getModel()
 
   -- Final Convolution stage
   local Con5    = ConCat4 - nn.SpatialConvolution(194, 2, 3, 3, 1, 1, 1, 1)
-                          - nn.SpatialUpSamplingBilinear(4)
+                          -- nn.SpatialUpSamplingBilinear(4)
 --  -- loss(output) stage 1
 --  local down1 = {flowIn, Con1} - nn.SpatialAdaptiveAveragePooling(8, 6)
 --  local loss1 = {down1, Con1}  - nn.SmoothL1Criterion()
