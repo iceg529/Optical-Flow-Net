@@ -8,9 +8,9 @@ import random
 import cPickle
 from sys import getsizeof
 
-trainNum = list(range(904)) #22232
+trainNum = list(range(904*2)) #22232
 random.shuffle(trainNum)
-testNum = list(range(136))  #640
+testNum = list(range(137*1))  #640
 random.shuffle(testNum)
 
 cPickle.dump(trainNum, open('trainNum.p', 'wb')) 
@@ -25,7 +25,7 @@ def readFloToFile(floFile):
 	    else:
 		w = np.fromfile(f, np.int32, count=1)
 		h = np.fromfile(f, np.int32, count=1)
-		print 'Reading %d x %d flo file' % (w, h)
+		#print 'Reading %d x %d flo file' % (w, h)
 		data = np.fromfile(f, np.float32, count=2*w*h)
 		# Reshape data into 3D array (columns, rows, bands)
 		data2D = np.reshape(data, (2, w, h), order='F') #data2D = np.resize(data, (2, h, w))
@@ -34,21 +34,21 @@ def readFloToFile(floFile):
 
 def writeTrainData():
 	print('writing to file ...')
-	f = h5py.File("trainData_Sintel.h5", 'r+')
+	f = h5py.File("FreshCode/trainData_Sintel.h5", 'w')
 	img1List = open("Sintel_Train_Img1.list").readlines()
 	img2List = open("Sintel_Train_Img2.list").readlines()
 	flowList = open("Sintel_Train_Flow.list").readlines()
 	j = 0
 	batInd = 1
-	X_data = np.empty([8, 8, 448, 1024]) #change to img size (448 not orig size , multiple of 32)
+	X_data = np.empty([8, 8, 436, 1024]) #change to img size (448 not orig size , multiple of 32)
 	for i in trainNum:
 		print(i)
 		temp = np.transpose(np.asarray(misc.imread(str(img1List[i].split()[0]))), (2,0,1))
-		X_data[j, :3] = temp[:,:416,:]
+		X_data[j, :3] = temp
 		temp = np.transpose(np.asarray(misc.imread(str(img2List[i].split()[0]))), (2,0,1))
-		X_data[j, [3,4,5]] = temp[:,:416,:]
+		X_data[j, [3,4,5]] = temp
 		temp = np.transpose(np.asarray(readFloToFile(str(flowList[i].split()[0]))), (0,2,1))
-		X_data[j, 6:] = temp[:,:416,:]
+		X_data[j, 6:] = temp
 		if j == 7:
 			print(X_data.shape)
 			dSetName = "/data"+str(batInd)
@@ -63,19 +63,19 @@ def writeTrainData():
 
 def writeTestData():
 	print('writing to file ...')
-	f = h5py.File("testData_Sintel.h5", 'r+')
+	f = h5py.File("FreshCode/testData_SintelClean.h5", 'w')
 	img1List = open("Sintel_Test_Img1.list").readlines()
 	img2List = open("Sintel_Test_Img2.list").readlines()
 	flowList = open("Sintel_Test_Flow.list").readlines()
 	j = 0
 	batInd = 1
-	X_data = np.empty([137, 8, 448, 1024]) # [640, 8, 384, 512]
+	X_data = np.empty([137*1, 8, 436, 1024]) # [640, 8, 384, 512]
 	for i in testNum:
 		print(i)
 		X_data[j, :3] = np.transpose(np.asarray(misc.imread(str(img1List[i].split()[0]))), (2,0,1))
 		X_data[j, [3,4,5]] = np.transpose(np.asarray(misc.imread(str(img2List[i].split()[0]))), (2,0,1))
 		X_data[j, 6:] = np.transpose(np.asarray(readFloToFile(str(flowList[i].split()[0]))), (0,2,1))
-		if j == 639:
+		if j == ((137*1) - 1):
 			print(X_data.shape)
 			dSetName = "/data"+str(batInd)
 			f.create_dataset(dSetName, data=X_data, compression='gzip', compression_opts=9)
@@ -108,10 +108,10 @@ def sampleForColorCoding():
 	"""
 		
 	
-	data1 = np.transpose(np.asarray(misc.imread('FreshCode/Evaluate/OtherExamples/frame_0001.png')), (2,0,1))
-        data2 = np.transpose(np.asarray(misc.imread('FreshCode/Evaluate/OtherExamples/frame_0002.png')), (2,0,1))
-	data3 = np.transpose(np.asarray(readFloToFile('FreshCode/Evaluate/OtherExamples/frame_0015.flo')), (0,2,1))
-	data4 = np.transpose(np.asarray(readFloToFile('FreshCode/Evaluate/sintel3_epic.flo')), (0,2,1))
+	data1 = np.transpose(np.asarray(misc.imread('../MPI-Sintel-complete/training/clean/bamboo_2/frame_0015.png')), (2,0,1))
+        data2 = np.transpose(np.asarray(misc.imread('../MPI-Sintel-complete/training/clean/bamboo_2/frame_0016.png')), (2,0,1))
+	data3 = np.transpose(np.asarray(readFloToFile('../MPI-Sintel-complete/training/flow/bamboo_2/frame_0015.flo')), (0,2,1))
+	data4 = np.transpose(np.asarray(readFloToFile('FreshCode/Evaluate/sintel4_caffe.flo')), (0,2,1)) #sintel3_epic.flo
 
 	#data3 = np.transpose(np.asarray(readFloToFile('../../FlowNet/dispflownet-release/models/FlowNetS/data/0000000-gt.flo')), (0,2,1))
 	#data1 = np.transpose(np.asarray(misc.imread('../../FlowNet/dispflownet-release/models/FlowNetS/data/0000000-img0.ppm')), (2,0,1))
@@ -124,16 +124,16 @@ def sampleForColorCoding():
 	f.create_dataset("/data4", data=data4)
 
 def createMeanImg():
-	f = h5py.File("meanDataSintel.h5", 'w')
+	f = h5py.File("FreshCode/meanDataSintel.h5", 'w')
 	img1List = open("Sintel_Train_Img1.list").readlines()
 	img2List = open("Sintel_Train_Img2.list").readlines()
-        meanIm1 = np.zeros((3, 448, 1024))  # 384, 512   448 , 1024
-	meanIm2 = np.zeros((3, 448, 1024))
-	meanSqredIm1 = np.zeros((3, 448, 1024))
-	meanSqredIm2 = np.zeros((3, 448, 1024))
-	data1 = np.empty([4, 3, 448, 1024])
-	temp = np.empty([4, 3, 448, 1024])
-	totalImgs = 904 #22232
+        meanIm1 = np.zeros((3, 436, 1024))  # 384, 512   448 , 1024
+	meanIm2 = np.zeros((3, 436, 1024))
+	meanSqredIm1 = np.zeros((3, 436, 1024))
+	meanSqredIm2 = np.zeros((3, 436, 1024))
+	data1 = np.empty([4, 3, 436, 1024])
+	temp = np.empty([4, 3, 436, 1024])
+	totalImgs = 904*2 #22232
 	for i in range(0, (totalImgs-1)):
 		meanIm1 = meanIm1 + np.transpose(np.asarray(misc.imread(str(img1List[i].split()[0]))), (2,0,1))
 		meanIm2 = meanIm2 + np.transpose(np.asarray(misc.imread(str(img2List[i].split()[0]))), (2,0,1))

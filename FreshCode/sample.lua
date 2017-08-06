@@ -16,15 +16,16 @@ if dir_path ~= nil then
   package.path = dir_path .."?.lua;".. package.path
 end
 
-local opTtrain = 'trainData_Sintel.h5' --trainData.h5 trainData_16.h5
-local opTval = 'testData.h5'
+local opTtrain = 'trainData_Sintel.h5' --trainData.h5 trainData_16.h5 trainData_Sintel.h5
+local opTval = 'testData_SintelClean.h5' --testData.h5 testData_SintelClean.h5
+local opTDataMode = 'sintel' -- chair or sintel
 local opTshuffle = false 
-local opTthreads = 3
-local opTepoch = 100
-local opTsnapshotInterval = 30
-local epIncrement = 0 -- 5, 0, ...
-local opTsave = "logFiles/finetuning"
-local isTrain = true -- true false
+local opTthreads = 2
+local opTepoch = 60
+local opTsnapshotInterval = 10
+local epIncrement =  140-- 5, 0, 90, 240, 260 ...
+local opTsave = "logFiles/finetuning"  -- "logFiles/finetuning" , "logFiles", "logFiles/newWithoutReg"
+local isTrain = false -- true false
 profiler = xlua.Profiler(false, true)
 
 require 'logmessage'
@@ -51,12 +52,27 @@ require 'model'
 local trainDataLoader, trainSize, inputTensorShape
 local valDataLoader, valSize
 
-local num_threads_data_loader = 3
+local num_threads_data_loader = opTthreads
 local valData = {}
 
 local meanFile = hdf5.open('meanDataSintel.h5','r')  --meanData.h5
-meanData = meanFile:read('/data'):all():cuda()     
+local meanData2 = meanFile:read('/data'):all()    
 meanFile:close()
+meanFile = hdf5.open('meanData.h5','r')
+local meanData1 = meanFile:read('/data'):all()     
+meanFile:close()
+
+if opTDataMode == 'sintel' then
+	meanData = fuseMean(meanData1,meanData2) 
+	--or following lines if no fuse wanted and mean1 wanted
+	--[[meanData = torch.Tensor(4,3,436,1024) 
+	meanData[1] = image.scale(meanData1[1],1024,436)
+	meanData[2] = image.scale(meanData1[2],1024,436)
+	meanData[3] = image.scale(meanData1[3],1024,436)
+	meanData[4] = image.scale(meanData1[4],1024,436)--]]
+elseif opTDataMode == 'chair' then
+	meanData = meanData1 
+end
 
 if isTrain then
 	-- create data loader for training dataset
@@ -84,28 +100,35 @@ else
 	logmessage.display(0,'found ' .. valSize .. ' images in train db' .. opTval)
 	
 	if valDataLoader:acceptsjob() then
-	  valDataLoader:scheduleNextBatch(640, 1, valData, true)
+	  valDataLoader:scheduleNextBatch(valSize, 1, valData, true) -- 640 , 137*1   val data size
 	end
 	valDataLoader:waitNext()
-        print(valData.im1[1][1][356][467])
         valData.im1, valData.im2 = normalizeMean(meanData, valData.im1, valData.im2)
 end
 
 local downSampleFlowWeights = getWeight(2, 7) -- convolution weights , args: 2 - num of channels , 7 - conv filter size
 downSampleFlowWeights:cuda()
 -- validation function
-local function validation(model,valData,criterion,flowWeights)
+local function validation(model,valData,criterion,flowWeights,opTDataMode)
   --model:evaluate()
   local valErr = 0
-  --local valData = {} 
-    
-  --print(valData.im1:size())
-  for i = 1,valData.im1:size(1) do
-    -- estimate f
-    local input = torch.cat(valData.im1[i], valData.im2[i], 1)
+  local input, flInput, tmpValImg1, tmpValImg2, tmpValFlow
+  for i = 1,valData.im1:size(1) do    
+    if opTDataMode == 'chair' then
+	input = torch.cat(valData.im1[i], valData.im2[i], 1) -- uncomment for chairs data validation and comment for sintel
+	flInput =  valData.flow[i] -- valData.flow[i] for chairs data validation or tmpValFlow for sintel 
+    elseif opTDataMode == 'sintel' then
+	-- comment for chairs data validation and uncomment for sintel
+	tmpValImg1 = image.scale(valData.im1[i],1024,448)
+    	tmpValImg2 = image.scale(valData.im2[i],1024,448) 
+    	tmpValFlow = image.scale(valData.flow[i],1024,448)
+    	input = torch.cat(tmpValImg1, tmpValImg2, 1)
+	flInput =  tmpValFlow -- valData.flow[i] for chairs data validation or tmpValFlow for sintel 
+    end
+
     input = input:cuda()
     local output = model:forward(input)
-    local flInput = valData.flow[i]
+    
     flInput = flInput:cuda()
 
     local mod = nn.SpatialConvolution(2,2, 7, 7, 4,4,3,3) -- nn.SpatialConvolution(2,2,1, 1, 4, 4, 0, 0)
@@ -114,16 +137,14 @@ local function validation(model,valData,criterion,flowWeights)
     mod = mod:cuda()
     local down5 = mod:forward(flInput)
     down5 = down5:cuda()
-
+    
+    local module = nn.SpatialUpSamplingBilinear(4):cuda()
+    local predFi = module:forward(output)
     --local down5 = nn.SpatialAdaptiveAveragePooling(128, 96):cuda():forward(flInput)
     local err = criterion:forward(output, down5)
     valErr = valErr + err
-    
-    if i== 1 then
-      print(torch.min(output[1]))
-      print(torch.max(output[1]))
-      print(input[1][356][467])
-      torch.save('Evaluate/down.t7',output)
+    if i == valData.im1:size(1) then    
+	print('model validated ' .. i)
     end
   end
   
@@ -149,7 +170,8 @@ valLogger:display(false)
 --local model = getModel()
 --local model = require('weight-init')(getModel(), 'kaiming')
 --local model = torch.load('logFiles/flownetLC6_LR3_5_Model.t7') -- this is the base model for most
-local model = torch.load('logFiles/flownetLC6_LR3_180_Model.t7')
+--local model = torch.load('logFiles/newWithoutReg/flownetLC8_LR3_240_Model.t7') -- or LC8_LR3_260_Model , one of the base model of augmented models
+local model = torch.load('logFiles/finetuning/flownetLC9_LR3_140_Model.t7') -- 'logFiles/flownetLC6_LR3_180_Model.t7' this is the model before finetuning with sintel
 model = model:cuda()
 local criterion = nn.AvgEndPointError() --SmoothL1Criterion
 criterion = criterion:cuda()
@@ -184,8 +206,7 @@ if isTrain then
 	-- whether the network defined a preferred batch size (there
 	-- can be separate batch sizes for the training and validation
 	-- sets)
-        local leRate = 0.0001 --0.0001 0.1
-	local wDecay = 0.0004 -- 0.0004 0
+        
 	local trainBatchSize = 8 --8 16
 	local logging_check = trainSize --11116 -- 8 splits of training data(22232/8)
 	local next_snapshot_save = 0.3
@@ -207,7 +228,7 @@ if isTrain then
         local actualEp = epoch + epIncrement --+ 170
 
 	logmessage.display(0,'started training the model')
-	local config = {learningRate = (0.0001), --0.0001 0.1
+	local config = {learningRate = (0.000001/2), --0.0001 0.1 0.000001 0.0001/16(for augment, since divided at earlier epochs in below lines)
 		           weightDecay = 0.0004, --0.0004 0
 		           momentum = 0.9,
 		           learningRateDecay = 0 }--3e-5	
@@ -226,14 +247,16 @@ if isTrain then
 	  --trainSize = 22232  -- 22232 , 22224(to be multiple of 16)
 	  print('==> doing epoch on training data:')
 	  print("==> online epoch # " .. epoch .. ' [batchSize = ' .. trainBatchSize .. ']')
-
+	  
+	  --this bit for normal training
 	  --[[if actualEp == 146 or actualEp == 150 or actualEp == 160 or actualEp == 166 or actualEp == 170 or actualEp == 175 then
 	    config.learningRate = (config.learningRate)/(2.0)
           end--]] --for without augmentation
 
-	  if actualEp == 130 or actualEp == 150 or actualEp == 170 or actualEp == 190 then
+	  --this bit for augmentation
+	  --[[if actualEp == 130 or actualEp == 150 or actualEp == 170 or actualEp == 190 then
 	    config.learningRate = (config.learningRate)/(2.0)
-          end
+          end--]]
 
 	  local t = 1
 	  while t <= trainSize do --trainSize
@@ -265,10 +288,8 @@ if isTrain then
 	    im1:copy(data.im1)
 	    im2:copy(data.im2)
 	    flow:copy(data.flow)
-	    
 	    ----- mean normalization -------------
 	    im1, im2 = normalizeMean(meanData, im1, im2)
-	    
 	    --[[im1 = im1:cuda()
 	    im2 = im2:cuda()
 	    flow = flow:cuda()--]]
@@ -291,25 +312,29 @@ if isTrain then
 	      -- evaluate function for complete mini batch
 	      for i = 1,im1:size(1) do
 		-- estimate f		
-		--local input = torch.cat(im1[i], im2[i], 1)
+		local input, tmpImg1, tmpImg2, tmpFlow, flowInput
 		-- resized for sintel dataset (orig size 1024, 436) shud be multiple of 32 to avoid size issue at nn.JoinTable(), remember to change later
-	    		
-		local tmpImg1 = torch.Tensor(1,im1[i]:size(1),448,im1[i]:size(3)):cuda()
-	      	local tmpImg2 = torch.Tensor(tmpImg1:size()):cuda()
-		local tmpFlow = torch.Tensor(1,2,448,im1[i]:size(3)):cuda()
-
-	      	tmpImg1[1] = image.scale(im1[i],1024,448)
-              	tmpImg2[1] = image.scale(im2[i],1024,448)
-		tmpFlow[1] = image.scale(flow[i],1024,448)
-		local input = torch.cat(tmpImg1[1], tmpImg2[1], 1)
+	    	if opTDataMode == 'sintel' then
+		  tmpImg1 = torch.Tensor(1,im1[i]:size(1),448,im1[i]:size(3)):cuda()
+	      	  tmpImg2 = torch.Tensor(tmpImg1:size()):cuda()
+		  tmpFlow = torch.Tensor(1,2,448,im1[i]:size(3)):cuda()
+	      	  tmpImg1[1] = image.scale(im1[i],1024,448)
+              	  tmpImg2[1] = image.scale(im2[i],1024,448)
+		  tmpFlow[1] = image.scale(flow[i],1024,448)
+		  input = torch.cat(tmpImg1[1], tmpImg2[1], 1)
+		  flowInput = tmpFlow[1]:cuda()
+		elseif opTDataMode == 'chair' then
+		  input = torch.cat(im1[i], im2[i], 1)
+		  flowInput = flow[i]:cuda()
+		end	
+		input = input:cuda()
 		local output = model:forward(input)
-		--local down5 = nn.SpatialAdaptiveAveragePooling(128, 96):cuda():forward(flow[i])
-		
+				
 		local mod = nn.SpatialConvolution(2,2, 7, 7, 4,4,3,3) -- nn.SpatialConvolution(2,2,1, 1, 4, 4, 0, 0)
 		mod.weight = downSampleFlowWeights
 		mod.bias = torch.Tensor(2):fill(0)
 		mod = mod:cuda()
-		local down5 = mod:forward(tmpFlow[1]:cuda()) -- flow (replace later)
+		local down5 = mod:forward(flowInput)
 		--print('aft model fwd')
 		down5 = down5:cuda()
 		      --local grdTruth = flow[i]:cuda()
@@ -318,8 +343,8 @@ if isTrain then
 		-- estimate df/dW
 		local df_do = criterion:backward(output, down5) --grdTruth
 		model:backward(input, df_do)
-		--print(torch.min(im1[i])) --output[1]
-		--print(torch.max(im1[i]))
+		--print(torch.min(tmpImg1[1])) --output[1] im1[i]
+		--print(torch.max(tmpImg1[1]))
 	      end
 
 	      -- normalize gradients and f(X)
@@ -336,8 +361,8 @@ if isTrain then
 	      --config.weightDecay = 0.0004
             --end   
     
-            print(config.learningRate)
-	    print((config.learningRate)/(2.0))
+            --print(config.learningRate)
+	    --print((config.learningRate)/(2.0))
 	    -- optimize on current mini-batch
 	    		         
 	    _, train_err = optim.adam(feval, parameters, config)
@@ -395,7 +420,7 @@ if isTrain then
 	  -- time taken
 	  time = sys.clock() - time
 	  --time = time / trainSize
-	  print("==> time to learn for 1 epoch = " .. (time) .. 'ms')
+	  print("==> time to learn for 1 epoch = " .. (time) .. 's')
 	   
 	  epoch = epoch+1
 	  actualEp = actualEp+1
@@ -404,12 +429,18 @@ if isTrain then
 	-- if required, save snapshot at the end
 	saveModel(model, opTsave, snapshot_prefix, opTepoch)
 else
-	local models = {'flownetLC6_LR3_55','newWithoutReg/flownetLC7_LR3_30','newWithoutReg/flownetLC7_LR3_55'}
+	local models = {'finetuning/flownetLC9_LR3_90_Model', 'finetuning/flownetLC9_LR3_140_Model', 'finetuning/flownetLC9_LR3_170_Model', 'finetuning/flownetLC9_LR3_190_Model', 'finetuning/flownetLC9_LR3_200_Model', 'finetuning/flownetLC9_LR3_100_Model(setup1)', 'finetuning/flownetLC9_LR3_90_Model(setup4)', 'finetuning/flownetLC9_LR3_100_Model(setup6)', 'finetuning/flownetLC9_LR3_160_Model(setup6)','finetuning/flownetLC9_LR3_110_Model(setup6,noAugafter100)','finetuning/flownetLC9_LR3_120_Model(setup6,noAugafter100)', 'finetuning/flownetLC9_LR3_130_Model(setup6,noAugafter100)'}
+
+	--{'finetuning/flownetLC9_LR3_100_Model(setup1)', 'finetuning/flownetLC9_LR3_90_Model(setup4)', 'finetuning/flownetLC9_LR3_100_Model', 'finetuning/flownetLC9_LR3_160_Model', 'finetuning/flownetLC9_LR3_180_Model', 'finetuning/flownetLC9_LR3_220_Model', 'finetuning/flownetLC9_LR3_240_Model', 'finetuning/flownetLC9_LR3_280_Model',  'finetuning/flownetLC9_LR3_110_Model(setup6,noAugafter100)', 'finetuning/flownetLC9_LR3_120_Model(setup6,noAugafter100)', 'finetuning/flownetLC9_LR3_130_Model(setup6,noAugafter100)'}
+
+	--{'flownetLC6_LR3_180','newWithoutReg/flownetLC8_LR3_210','newWithoutReg/flownetLC8_LR3_240','newWithoutReg/flownetLC8_LR3_260','newWithoutReg/flownetLC8_LR3_268','newWithoutReg/flownetLC8_LR3_275','newWithoutReg/flownetLC8_LR3_270','newWithoutReg/flownetLC8_LR3_280'}	
+	
+	--{'flownetLC6_LR3_55','newWithoutReg/flownetLC7_LR3_30','newWithoutReg/flownetLC7_LR3_55'}
 	--{'flownetLC6_LR3_5','flownetLC6_LR3_55','flownetLC6_LR3_95','flownetLC6_LR3_115','flownetLC6_LR3_145','flownetLC6_LR3_155','flownetLC6_LR3_165','flownetLC6_LR3_180'} 
 	--{'flownetLC1_LR3_5000','flownetLC2_LR3_1000','flownetLC3_LR3_500','flownetLC4_LR3_400','flownetLC5_LR3_200','flownet_LR3_172'} -
-	for i=1,3 do --for i=1,6 do
-	  local model1 = torch.load('logFiles/' .. models[i] .. '_Model.t7')
-	  local avgValErr = validation(model1, valData, criterion, downSampleFlowWeights)
+	for i=1,#models do --for i=1,6 do
+	  local model1 = torch.load('logFiles/' .. models[i] .. '.t7') -- remove _Model if adding in the model names above
+	  local avgValErr = validation(model1, valData, criterion, downSampleFlowWeights,opTDataMode)
       	  valLogger:add{avgValErr}
 	  valLogger:plot()
         end

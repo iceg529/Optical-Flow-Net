@@ -66,7 +66,8 @@ end
 ----- mean normalization -------------
 function normalizeMean(meanData, frame1, frame2)
   --local temp = torch.Tensor(1,3,384,512)
-  --local temp2 = torch.Tensor(1,3,384,512)
+  --local temp2 = torch.Tensor(1,3,384,512)  
+  meanData = meanData:cuda()
   local temp = torch.Tensor(1,meanData[1]:size(1),meanData[1]:size(2),meanData[1]:size(3))
   local temp2 = torch.Tensor(temp:size())
 
@@ -81,6 +82,19 @@ function normalizeMean(meanData, frame1, frame2)
   frame2:cdiv(temp2:expandAs(frame2))
   return frame1, frame2
 end
+
+----- fusing mean data -------------
+function fuseMean(meanData1,meanData2)
+  local N1 = 22232
+  local N2 = 904*2  
+  local fusedMean = torch.Tensor(meanData2:size()) -- if mean shud be of size sintel data, change if needed to be of size chairs dataset
+  fusedMean[1] = ((meanData2[1]):mul(N2)):add((image.scale(meanData1[1],1024,436)):mul(N1)):div(N1 + N2)
+  fusedMean[2] = ((meanData2[2]):mul(N2)):add((image.scale(meanData1[2],1024,436)):mul(N1)):div(N1 + N2)
+  fusedMean[3] = ((meanData2[3]):mul(N2)):add((image.scale(meanData1[3],1024,436)):mul(N1)):div(N1 + N2)
+  fusedMean[4] = ((meanData2[4]):mul(N2)):add((image.scale(meanData1[4],1024,436)):mul(N1)):div(N1 + N2)
+  return fusedMean
+end
+
 
 
 ----- color augmentation --------------------

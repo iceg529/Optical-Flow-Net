@@ -58,10 +58,10 @@ function DBSource:new (db_path, isTrain, shuffle)
     local dim, n_records
     if isTrain then
     	dim = myFile:read('/data1'):dataspaceSize()
-    	n_records = 904 -- 22232 904
+    	n_records = 904*2 -- 22232 904*2
     else
         dim = myFile:read('/data1'):dataspaceSize()
-    	n_records = 640 -- 640 
+    	n_records = dim[1] -- 640 137*1
     end
     myFile:close()
         
@@ -106,14 +106,17 @@ function DBSource:inputTensorShape()
 end
 
 -- Derived class method getSample (HDF5 flavour)
-function DBSource:hdf5_getSample(shuffle, indx)
+function DBSource:hdf5_getSample(shuffle, indx)    
     if not self.db_id or self.cursor>self.dbs[self.db_id].records then
         self.db_id = self.db_id or 0
         assert(self.db_id < #self.dbs, "Trying to read more records than available")
         self.db_id = self.db_id + 1        
         self.cursor = 1
     end     
-
+    --print('id ' .. self.db_id)
+    --print('cursor ' .. self.cursor)
+    --print('records ' .. self.dbs[self.db_id].records)
+    --print('Num of DBs ' .. #self.dbs)
     local idx = indx
 --    if shuffle then
 --        idx = math.max(1,torch.ceil(torch.rand(1)[1] * (self.dbs[self.db_id].records)*(1/8)))
@@ -270,13 +273,13 @@ function DataLoader:scheduleNextBatch(batchSize, dataIdx, dataTable)
                 function(batchSize, in1, in2, out, indx)
                     -- executes in main thread
                     
-		   --[[ profiler:start('augmentation process')		    
+		    --[[profiler:start('augmentation process')		    
 	 	    ----- augmentation ----------	    
 		    if torch.bernoulli(0.5) == 1 then
 	 	      print('in affine')
 		      local trMax = round(0.2 * in1:size(4))
 		      local trY, trX, theta
-		      local scaledW, scaledH, scaleRand      	      
+		      local scaledW, scaledH, scaleRand, actualW, actualH   	      
 
 		      for i = 1,in1:size(1) do
 			trY = torch.random(-trMax,trMax)
@@ -285,10 +288,12 @@ function DataLoader:scheduleNextBatch(batchSize, dataIdx, dataTable)
 			scaleRand = ((torch.uniform() * 0.8) + 1.2) -- range conversion "NewValue = (((OldValue - OldMin) * NewRange) / OldRange) + NewMin"
 			scaledW = round(scaleRand * in1:size(4))
 			scaledH = round(scaleRand * in1:size(3))	
-			
-			in1[i] = image.crop(image.scale(image.rotate(image.translate(in1[i], trX, trY), theta, 'bilinear'), scaledW, scaledH), 'c', 512, 384)
-			in2[i] = image.crop(image.scale(image.rotate(image.translate(in2[i], trX, trY), theta, 'bilinear'), scaledW, scaledH), 'c', 512, 384)
-			out[i] = image.crop(image.scale(image.rotate(image.translate(out[i], trX, trY), theta, 'bilinear'), scaledW, scaledH), 'c', 512, 384)
+			actualW = in1:size(4)
+			actualH = in1:size(3)
+
+			in1[i] = image.crop(image.scale(image.rotate(image.translate(in1[i], trX, trY), theta, 'bilinear'), scaledW, scaledH), 'c', actualW, actualH)
+			in2[i] = image.crop(image.scale(image.rotate(image.translate(in2[i], trX, trY), theta, 'bilinear'), scaledW, scaledH), 'c', actualW, actualH)
+			out[i] = image.crop(image.scale(image.rotate(image.translate(out[i], trX, trY), theta, 'bilinear'), scaledW, scaledH), 'c', actualW, actualH)
 						
 			local colorAugParams = {addNoiseSig = torch.uniform(0, 0.04), colFac1 = torch.uniform(0.5, 2), colFac2 = torch.uniform(0.5, 2), colFac3 = torch.uniform(0.5, 2), gamma = torch.uniform(0.7, 1.5), brightnessSigma = 0.2, contrast = torch.uniform(-0.8, 0.4)}
 						
@@ -296,7 +301,7 @@ function DataLoader:scheduleNextBatch(batchSize, dataIdx, dataTable)
 			in2[i] = colorAugmentation(in2[i],colorAugParams)
 		      end
 	  	    end
-		    profiler:lap('augmentation process') ]]--
+		    profiler:lap('augmentation process')--]]
 
 		    dataTable.batchSize = batchSize
                     dataTable.im1 = in1

@@ -1,0 +1,34 @@
+
+from their readme :
+
+matlab -nodesktop -nojvm -r "addpath(<path_to_sed>); addpath(genpath(<path_to_piotr_toolbox>)); load('modelFinal.mat'); I = imread(<im1name>); if size(I,3)==1, I = cat(3,I,I,I); end; edges = edgesDetect(I, model); fid=fopen(<edgefile>,'wb'); fwrite(fid,transpose(edges),'single'); fclose(fid); exit"
+
+<path_to_deepmatching>/deepmatching <im1name> <im2name> -png_settings -improved_settings -out <matchfile>
+
+./epicflow <im1name> <im2name> <edgefile> <matchfile> <outputfile> [options]
+
+
+do the following: (uses static version below)
+
+1. epicflow folder : /home/murugan/EpicFlow_v1.00/out.flo
+
+2. extract edges : open matlab , change current folders accordingly in following first two or three lines 
+				>> addpath(genpath('/home/murugan/EpicFlow_v1.00/toolbox-master')); savepath;
+				>> load('modelFinal.mat');
+				>> I = imread('deepmatching/frame_0015.png');
+				>> if size(I,3)==1, I = cat(3,I,I,I); end;
+				>> edges = edgesDetect(I, model);
+				>> fid=fopen('edgefile','wb');
+				>> fwrite(fid,transpose(edges),'single');
+				>> fclose(fid);
+
+				and compile mex files if needed after 1st line above(>> mex private/edgesDetectMex.cpp -outdir private, >> mex private/edgesNmsMex.cpp -outdir private, spDetectMex, edgeBoxesMex)
+   gives edge file
+
+3. deep matching to extract sparse matches, gives match file
+
+   ~/EpicFlow_v1.00/deepmatching$ ./deepmatching-static frame_0015.png frame_0016.png -out matchfile
+
+4. uses both edgefile and matchfile and gives output flow , using dense interpolation
+
+   ~/EpicFlow_v1.00$ ./epicflow-static frame_0015.png frame_0016.png edgefile deepmatching/matchfile out.flo
