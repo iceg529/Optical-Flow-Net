@@ -17,16 +17,16 @@ if dir_path ~= nil then
   package.path = dir_path .."?.lua;".. package.path
 end
 
-local opTtrain = 'trainData.h5' --trainData.h5 trainData_16.h5 trainData_Sintel.h5
+local opTtrain = 'trainData_Sintel.h5' --trainData.h5 trainData_16.h5 trainData_Sintel.h5
 local opTval = 'testData_SintelClean.h5' --testData.h5 testData_SintelClean.h5
 local opTDataMode = 'sintel' -- chair or sintel
 local opTshuffle = false 
-local opTthreads = 3
-local opTepoch = 1
-local opTsnapshotInterval = 10
-local epIncrement =  0-- 5, 0, 90, 240, 260 ...
-local opTsave = "logFiles/correlation"  -- "logFiles/finetuning" , "logFiles", "logFiles/newWithoutReg"
-local isTrain = false -- true false
+local opTthreads = 3 -- 3 1
+local opTepoch = 50 --100 
+local opTsnapshotInterval = 5
+local epIncrement = 50 -- 176 -- 151 221-- 
+local opTsave = "logFiles/residual/finetuning/res2"  -- "logFiles/residual/finetuning/augm"  
+local isTrain = true -- true false
 local isCorr = false -- true false
 profiler = xlua.Profiler(false, true)
 
@@ -47,7 +47,9 @@ require 'data'
 if isCorr then 
   require 'modelCorr'
 else
-  require 'model'
+  require 'modelRes' -- 'model'
+  require 'modelResSplit1'
+  require 'modelResSplit2'
 end
 
 -- DataLoader objects take care of loading data from
@@ -89,7 +91,7 @@ if isTrain then
 	      opTshuffle
 	)
 	-- retrieve info from train DB (number of records and shape of input tensors)
-	trainSize, inputTensorShape = trainDataLoader:getInfo()
+	trainSize, inputTensorShape = trainDataLoader:getInfo()	
 	logmessage.display(0,'found ' .. trainSize .. ' images in train db' .. opTtrain)
 else
 	---- create data loader for validation dataset
@@ -116,26 +118,37 @@ downSampleFlowWeights:cuda()
 -- validation function
 local function validation(model,valData,criterion,flowWeights,opTDataMode)
   --model:evaluate()
+  model = model:cuda()
   local valErr = 0
   local input, flInput, tmpValImg1, tmpValImg2, tmpValFlow
+  if opTDataMode == 'chair' then
+    input = torch.Tensor(1,2*valData.im1:size(2),valData.im1:size(3),valData.im1:size(4))
+    flInput = torch.Tensor(1,2,valData.im1:size(3),valData.im1:size(4))
+  elseif opTDataMode == 'sintel' then
+    --midInput = torch.Tensor(1,2*valData.im1:size(2),448,1024)
+    --input = torch.Tensor(1,128,56,128)
+    input = torch.Tensor(1,2*valData.im1:size(2),448,1024)
+    flInput = torch.Tensor(1,2,448,1024)
+  end
+
   for i = 1,valData.im1:size(1) do    
     if opTDataMode == 'chair' then
-	input = torch.cat(valData.im1[i], valData.im2[i], 1) -- uncomment for chairs data validation and comment for sintel
-	flInput =  valData.flow[i] -- valData.flow[i] for chairs data validation or tmpValFlow for sintel 
+	input[1] = torch.cat(valData.im1[i], valData.im2[i], 1) -- uncomment for chairs data validation and comment for sintel
+	flInput[1] =  valData.flow[i] -- valData.flow[i] for chairs data validation or tmpValFlow for sintel 
     elseif opTDataMode == 'sintel' then
-	-- comment for chairs data validation and uncomment for sintel
-	tmpValImg1 = image.scale(valData.im1[i],1024,448)
-    	tmpValImg2 = image.scale(valData.im2[i],1024,448) 
-    	tmpValFlow = image.scale(valData.flow[i],1024,448)
-    	input = torch.cat(tmpValImg1, tmpValImg2, 1)
-	flInput =  tmpValFlow -- valData.flow[i] for chairs data validation or tmpValFlow for sintel 
+	-- comment for chairs data validation and uncomment for sintel 
+        tmpValImg1 = image.scale(valData.im1[i],1024,448)
+        tmpValImg2 = image.scale(valData.im2[i],1024,448) 
+        tmpValFlow = image.scale(valData.flow[i],1024,448)
+      	input[1] = torch.cat(tmpValImg1, tmpValImg2, 1)
+        --model2_1 = model2_1:cuda()
+      	--input = model2_1:forward(midInput:cuda())	      
+      	flInput[1] =  tmpValFlow -- valData.flow[i] for chairs data validation or tmpValFlow for sintel 
     end
-
     input = input:cuda()
-    local output = model:forward(input)
-    
     flInput = flInput:cuda()
-
+    local output = model:forward(input)  -- model:forward(midInput:cuda()) model2_2:forward(input)
+    
     local mod = nn.SpatialConvolution(2,2, 7, 7, 4,4,3,3) -- nn.SpatialConvolution(2,2,1, 1, 4, 4, 0, 0)
     mod.weight = flowWeights
     mod.bias = torch.Tensor(2):fill(0)
@@ -152,8 +165,6 @@ local function validation(model,valData,criterion,flowWeights,opTDataMode)
 	print('model validated ' .. i)
     end
   end
-  print(valErr)
-  print(valData.im1:size(1))
   valErr = valErr / valData.im1:size(1)
   collectgarbage()
   return valErr
@@ -174,16 +185,60 @@ valLogger:display(false)
 -- Retrieve parameters and gradients:
 -- this extracts and flattens all the trainable parameters of the mode into a 1-dim vector
 --local model = getModel()
-local model = require('weight-init')(getModel(), 'kaiming')
+--local model = require('weight-init')(getResModel(), 'kaiming')
 --local model = torch.load('logFiles/flownetLC6_LR3_5_Model.t7') -- this is the base model for most
 --local model = torch.load('logFiles/newWithoutReg/flownetLC8_LR3_240_Model.t7') -- or LC8_LR3_260_Model , one of the base model of augmented models
---local model = torch.load('logFiles/finetuning/flownetLC9_LR3_140_Model.t7') -- 'logFiles/flownetLC6_LR3_180_Model.t7' this is the model before finetuning with sintel
 
-model = model:cuda()
-local criterion = nn.AvgEndPointError() --SmoothL1Criterion
+local model = torch.load('logFiles/residual/res2/flownetLC1_LR3_' .. epIncrement .. '_Model.t7')
+--local model = torch.load('logFiles/residual/finetuning/augm/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') --  this is the model before finetuning with sintel
+
+--model = model:cuda()
+local criterion = nn.AvgEndPointError() --SmoothL1Criterion AvgEndPointError
 criterion = criterion:cuda()
+local model2_1 = getResModel1()
+local model2_2 = getResModel2():cuda()
+
 if model then
-   parameters,gradParameters = model:getParameters()
+--[[
+  local n=1
+
+  for k,v in pairs(model2_1.forwardnodes) do
+    (model2_1.forwardnodes)[k] = (model.forwardnodes)[k]
+    n=k
+  end
+
+  for k,v in pairs(model2_2.forwardnodes) do
+   (model2_2.forwardnodes)[k] = (model.forwardnodes)[n+1]
+    n=n+k
+  end --]]
+
+   
+   modelParam,modelGradParam = model:getParameters()
+   modelParam2,modelGradParam2 = model2_1:getParameters()
+   parameters,gradParameters = model2_2:getParameters()
+   --print(modelParam[{{1,modelParam2:size()[1]}}]:size())
+   modelParam2:copy(modelParam[{{1,modelParam2:size()[1]}}])
+   --[[print((modelParam2:size()[1])+1)
+   print(parameters:size()[1])
+   print(parameters:size())
+   print(modelParam:size())--]]
+   parameters:copy(modelParam[{{(modelParam2:size()[1])+1,modelParam:size()[1]}}])
+   
+   --[[for i=2,model:size() do --2
+       if i<40 then
+	 model2_1:get(i).parameters = model:get(i).parameters
+	 --model2_1:get(i).accGradParameters = model:get(i).accGradParameters
+       end
+   end
+   j = 2 --2
+   for i=2,model:size() do --2
+       if i>39 then 
+	 model2_2:get(j).parameters = model:get(i).parameters
+	 --model2_2:get(j).accGradParameters = model:get(i).accGradParameters
+         j = j+1       
+       end
+   end
+   parameters,gradParameters = model2_2:getParameters()--]]
 end
 
 
@@ -213,7 +268,7 @@ if isTrain then
 	-- whether the network defined a preferred batch size (there
 	-- can be separate batch sizes for the training and validation
 	-- sets)
-        
+        --trainSize = trainSize*2
 	local trainBatchSize = 8 --8 16
 	local logging_check = trainSize --11116 -- 8 splits of training data(22232/8)
 	local next_snapshot_save = 0.3
@@ -235,7 +290,7 @@ if isTrain then
         local actualEp = epoch + epIncrement --+ 170
 
 	logmessage.display(0,'started training the model')
-	local config = {learningRate = (0.001), --0.0001 0.1 0.000001 0.0001/16(for augment, since divided at earlier epochs in below lines)
+	local config = {learningRate = (0.00001), --0.0001 0.1 0.000001 0.0001/16(for augment, since divided at earlier epochs in below lines)
 		           weightDecay = 0.0004, --0.0004 0
 		           momentum = 0.9,
 		           learningRateDecay = 0 }--3e-5	
@@ -251,6 +306,7 @@ if isTrain then
 	  local im1, im2, flow
 	  local dataLoaderIdx = 1
 	  local data = {}
+	  local input, flowInput
 	  --trainSize = 22232  -- 22232 , 22224(to be multiple of 16)
 	  print('==> doing epoch on training data:')
 	  print("==> online epoch # " .. epoch .. ' [batchSize = ' .. trainBatchSize .. ']')
@@ -264,14 +320,16 @@ if isTrain then
 	  --[[if actualEp == 130 or actualEp == 150 or actualEp == 170 or actualEp == 190 then
 	    config.learningRate = (config.learningRate)/(2.0)
           end--]]
-
+	  local sintelFeatFile
 	  local t = 1
+	  local cnt = 0
 	  while t <= trainSize do --trainSize
 	    --model:training()
 	    -- disp progress
+	    cnt = cnt+1
 	    xlua.progress(t, trainSize)
 	    local time2 = sys.clock()
-	    profiler:start('pre-fetch')
+	    --[[profiler:start('pre-fetch')
 	    -- prefetch data thread
 	    --------------------------------------------------------------------------------
 	    while trainDataLoader:acceptsjob() do      
@@ -286,17 +344,34 @@ if isTrain then
 	    -- wait for next data loader job to complete
 	    trainDataLoader:waitNext()
 	    --------------------------------------------------------------------------------
-	    profiler:lap('pre-fetch')
+	    profiler:lap('pre-fetch')--]]
 	    -- get data from last load job
-	    local thisBatchSize = data.batchSize
-	    im1 = torch.Tensor(data.im1:size())
-	    im2 = torch.Tensor(data.im2:size())
-	    flow = torch.Tensor(data.flow:size())
-	    im1:copy(data.im1)
-	    im2:copy(data.im2)
-	    flow:copy(data.flow)
-	    ----- mean normalization -------------
-	    im1, im2 = normalizeMean(meanData, im1, im2)
+	    local thisBatchSize = 8--data.batchSize	    
+	    --flow = torch.Tensor(data.flow:size())	    
+	    --flow:copy(data.flow)    
+	    
+	    local tmpValFlow, flowDisp1
+	    if opTDataMode == 'chair' then
+	      input = torch.cat(im1, im2, 2)
+	      flowInput = flow
+ 	    elseif opTDataMode == 'sintel' then
+	      sintelFeatFile = hdf5.open('trainData_SintelFeatures.h5', 'r')
+	      flow = sintelFeatFile:read('/flow' .. cnt):all() --data.indx
+	      input = sintelFeatFile:read('/data' .. cnt):all() --data.indx
+	      --flowDisp1 = sintelFeatFile:read('/tmpflow' .. cnt):all()
+	      sintelFeatFile:close()
+	      --[[tmpValFlow = torch.Tensor(flow:size(1),flow:size(2),448, 1024)
+	      print(flow[1]:size())
+	      for i = 1,flow:size(1) do 
+	        --tmpValImg1[i] = image.scale(im1[i],1024,448)
+    	        --tmpValImg2[i] = image.scale(im2[i],1024,448) 
+    	        tmpValFlow[i] = image.scale(flow[i],1024,448)
+	      end--]]
+    	      --midInput = torch.cat(tmpValImg1, tmpValImg2, 2)
+	      --input = model2_1:forward(midInput:cuda())              
+	      
+	      flowInput = flow --tmpValFlow
+ 	    end
 	    --[[im1 = im1:cuda()
 	    im2 = im2:cuda()
 	    flow = flow:cuda()--]]
@@ -316,8 +391,35 @@ if isTrain then
 	      local f = 0
               profiler:start('feval process')
 	      local output
+	      -- remove from this line till above for loop
+	      flowInput = flowInput:cuda()
+              input = input:cuda()
+	      --flowDisp1 = flowDisp1:cuda()
+	      --print(flowDisp1:size())		
+	      if isCorr then
+		output = model:forward({input:sub(1,3), input:sub(4,6)})		
+	      else
+ 		--output = model2_2:forward(input)
+		output = model2_2:forward(input)		
+	      end
+		
+	      local mod = nn.SpatialConvolution(2,2, 7, 7, 4,4,3,3) -- nn.SpatialConvolution(2,2,1, 1, 4, 4, 0, 0)
+	      mod.weight = downSampleFlowWeights
+	      mod.bias = torch.Tensor(2):fill(0)
+	      mod = mod:cuda()
+	      local down5 = mod:forward(flowInput)
+		--print('aft model fwd')
+	      down5 = down5:cuda()
+		      --local grdTruth = flow[i]:cuda()
+	      local err = criterion:forward(output, down5) --grdTruth
+	      f = f + err
+		-- estimate df/dW
+	      local df_do = criterion:backward(output, down5) --grdTruth
+	      --model2_2:backward(input, df_do)	    
+	      model2_2:backward({input}, df_do)	      
+	
 	      -- evaluate function for complete mini batch
-	      for i = 1,im1:size(1) do
+	      --[[for i = 1,im1:size(1) do
 		-- estimate f		
 		local input, tmpImg1, tmpImg2, tmpFlow, flowInput
 		-- resized for sintel dataset (orig size 1024, 436) shud be multiple of 32 to avoid size issue at nn.JoinTable(), remember to change later
@@ -356,11 +458,11 @@ if isTrain then
 		model:backward(input, df_do)
 		--print(torch.min(tmpImg1[1])) --output[1] im1[i]
 		--print(torch.max(tmpImg1[1]))
-	      end
+	      end --]]
 
 	      -- normalize gradients and f(X)
-	      gradParameters:div(im1:size(1))
-	      f = f/(im1:size(1))
+	      --gradParameters:div(im1:size(1)) --uncomment 
+	      --f = f/(im1:size(1)) --uncomment
 	      print(f)
 	      profiler:lap('feval process')
 	      -- return f and df/dX
@@ -414,7 +516,10 @@ if isTrain then
 	    end
 
 	    if current_epoch >= next_snapshot_save then
-	      saveModel(model, opTsave, snapshot_prefix, current_epoch)
+   	      --modelParam[{{1,modelParam2:size()[1]}}]:copy(modelParam2)
+              modelParam[{{(modelParam2:size()[1])+1,modelParam:size()[1]}}]:copy(parameters)
+
+	      saveModel(model, opTsave, snapshot_prefix, current_epoch) --model model2_2
 	      next_snapshot_save = (round(current_epoch/opTsnapshotInterval) + 1) * opTsnapshotInterval -- To find next epoch value that exactly divisible by opt.snapshotInterval
 	      last_snapshot_save_epoch = current_epoch
 	    end
@@ -422,7 +527,7 @@ if isTrain then
 	    
 	    t = t + thisBatchSize
 	    profiler:lap('logging process')
-	    print('The data loaded till index ' .. data.indx)
+	    print('The data loaded till index ' .. cnt) --data.indx
 	    if math.fmod(NumBatches,10)==0 then
 	      collectgarbage()
 	    end
@@ -435,12 +540,28 @@ if isTrain then
 	   
 	  epoch = epoch+1
 	  actualEp = actualEp+1
-	end     
+	end
+     
+	--modelParam[{{1,modelParam2:size()[1]}}]:copy(modelParam2)
+        modelParam[{{(modelParam2:size()[1])+1,modelParam:size()[1]}}]:copy(parameters)
 
 	-- if required, save snapshot at the end
-	saveModel(model, opTsave, snapshot_prefix, opTepoch)
+	saveModel(model, opTsave, snapshot_prefix, opTepoch) --model model2_2
 else
-	local models = {'finetuning/flownetLC9_LR3_90_Model', 'finetuning/flownetLC9_LR3_140_Model', 'finetuning/flownetLC9_LR3_170_Model', 'finetuning/flownetLC9_LR3_190_Model', 'finetuning/flownetLC9_LR3_200_Model', 'finetuning/flownetLC9_LR3_100_Model(setup1)', 'finetuning/flownetLC9_LR3_90_Model(setup4)', 'finetuning/flownetLC9_LR3_100_Model(setup6)', 'finetuning/flownetLC9_LR3_160_Model(setup6)','finetuning/flownetLC9_LR3_110_Model(setup6,noAugafter100)','finetuning/flownetLC9_LR3_120_Model(setup6,noAugafter100)', 'finetuning/flownetLC9_LR3_130_Model(setup6,noAugafter100)'}
+	local models = {'residual/finetuning/flownetLC1_LR3_151_Model','residual/finetuning/flownetLC1_LR3_156_Model', 'residual/finetuning/augm/flownetLC1_LR3_156_Model', 'residual/finetuning/augm/flownetLC1_LR3_166_Model', 'residual/finetuning/augm/flownetLC1_LR3_171_Model', 'residual/finetuning/augm/flownetLC1_LR3_176_Model', 'residual/finetuning/res2/flownetLC1_LR3_55_Model', 'residual/finetuning/res2/flownetLC1_LR3_60_Model', 'residual/finetuning/res2/flownetLC1_LR3_65_Model', 'residual/finetuning/res2/flownetLC1_LR3_70_Model', 'residual/finetuning/res2/flownetLC1_LR3_75_Model', 'residual/finetuning/res2/flownetLC1_LR3_80_Model', 'residual/finetuning/res2/flownetLC1_LR3_85_Model', 'residual/finetuning/res2/flownetLC1_LR3_90_Model', 'residual/finetuning/res2/flownetLC1_LR3_95_Model', 'residual/finetuning/res2/flownetLC1_LR3_100_Model'}
+
+--	local models = {'residual/finetuning/flownetLC1_LR3_151_Model','residual/finetuning/flownetLC1_LR3_156_Model', 'residual/finetuning/augm/flownetLC1_LR3_156_Model', 'residual/finetuning/augm/flownetLC1_LR3_166_Model', 'residual/finetuning/augm/flownetLC1_LR3_171_Model', 'residual/finetuning/augm/flownetLC1_LR3_176_Model', 'residual/finetuning/augm/flownetLC1_LR3_181_Model', 'residual/finetuning/augm/flownetLC1_LR3_186_Model', 'residual/finetuning/augm/flownetLC1_LR3_191_Model', 'residual/finetuning/augm/flownetLC1_LR3_196_Model', 'residual/finetuning/flownetLC1_LR3_226_Model'}
+
+--,'residual/finetuning/augm/flownetLC1_LR3_161_Model','residual/finetuning/augm/flownetLC1_LR3_171_Model','residual/finetuning/augm/flownetLC1_LR3_181_Model','residual/finetuning/augm/flownetLC1_LR3_191_Model','residual/finetuning/augm/flownetLC1_LR3_201_Model','residual/finetuning/augm/flownetLC1_LR3_211_Model','residual/finetuning/augm/flownetLC1_LR3_221_Model','residual/finetuning/augm/flownetLC1_LR3_231_Model','residual/finetuning/augm/flownetLC1_LR3_241_Model','residual/finetuning/augm/flownetLC1_LR3_251_Model'}
+
+--{'residual/flownetLC1_LR3_121_Model(noAug_aft120)','residual/flownetLC1_LR3_131_Model','residual/flownetLC1_LR3_141_Model', 'residual/flownetLC1_LR3_151_Model', 'residual/finetuning/flownetLC1_LR3_201_Model', 'residual/finetuning/flownetLC1_LR3_206_Model', 'residual/finetuning/flownetLC1_LR3_211_Model', 'residual/finetuning/flownetLC1_LR3_216_Model', 'residual/finetuning/flownetLC1_LR3_221_Model', 'residual/finetuning/flownetLC1_LR3_226_Model', 'residual/finetuning/flownetLC1_LR3_231_Model', 'residual/finetuning/flownetLC1_LR3_236_Model', 'residual/finetuning/flownetLC1_LR3_241_Model', 'residual/finetuning/flownetLC1_LR3_246_Model', 'residual/finetuning/flownetLC1_LR3_251_Model'}
+
+--'residual/finetuning/flownetLC1_LR3_161_Model','residual/finetuning/flownetLC1_LR3_171_Model','residual/finetuning/flownetLC1_LR3_181_Model','residual/finetuning/flownetLC1_LR3_191_Model','residual/finetuning/flownetLC1_LR3_201_Model','residual/finetuning/flownetLC1_LR3_211_Model','residual/finetuning/flownetLC1_LR3_221_Model','residual/finetuning/flownetLC1_LR3_231_Model','residual/finetuning/flownetLC1_LR3_241_Model','residual/finetuning/flownetLC1_LR3_251_Model'}
+--, 'residual/flownetLC1_LR3_161_Model','residual/flownetLC1_LR3_171_Model', 'residual/flownetLC1_LR3_191_Model','residual/flownetLC1_LR3_211_Model', 'residual/flownetLC1_LR3_231_Model','residual/flownetLC1_LR3_251_Model'}
+
+--{'residual/flownetLC1_LR3_10_Model','residual/flownetLC1_LR3_30_Model','residual/flownetLC1_LR3_70_Model','residual/flownetLC1_LR3_80_Model','residual/flownetLC1_LR3_100_Model','residual/flownetLC1_LR3_120_Model','residual/flownetLC1_LR3_100_Model(aug_after70)','residual/flownetLC1_LR3_110_Model(aug_after70)','residual/flownetLC1_LR3_120_Model(aug_after70)','residual/flownetLC1_LR3_121_Model(noAug_aft120)','residual/flownetLC1_LR3_131_Model','residual/flownetLC1_LR3_141_Model','residual/flownetLC1_LR3_151_Model'}
+
+-- ,'residual/flownetLC1_LR3_100_Model(aug_after70)','residual/flownetLC1_LR3_110_Model(aug_after70)','residual/flownetLC1_LR3_120_Model(aug_after70)','residual/flownetLC1_LR3_121_Model(noAug_aft120)'
 
 	--{'finetuning/flownetLC9_LR3_100_Model(setup1)', 'finetuning/flownetLC9_LR3_90_Model(setup4)', 'finetuning/flownetLC9_LR3_100_Model', 'finetuning/flownetLC9_LR3_160_Model', 'finetuning/flownetLC9_LR3_180_Model', 'finetuning/flownetLC9_LR3_220_Model', 'finetuning/flownetLC9_LR3_240_Model', 'finetuning/flownetLC9_LR3_280_Model',  'finetuning/flownetLC9_LR3_110_Model(setup6,noAugafter100)', 'finetuning/flownetLC9_LR3_120_Model(setup6,noAugafter100)', 'finetuning/flownetLC9_LR3_130_Model(setup6,noAugafter100)'}
 

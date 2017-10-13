@@ -275,7 +275,7 @@ function DataLoader:scheduleNextBatch(batchSize, dataIdx, dataTable)
                     
 		    --[[profiler:start('augmentation process')		    
 	 	    ----- augmentation ----------	    
-		    if torch.bernoulli(0.5) == 1 then
+		    if torch.bernoulli(0.5) == 1 then  -- 0.5
 	 	      print('in affine')
 		      local trMax = round(0.2 * in1:size(4))
 		      local trY, trX, theta

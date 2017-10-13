@@ -6,21 +6,23 @@ function getModel()
   
   local outputs = {}
   --table.insert(inputs, nn.Identity()())
-  local inputs = nn.Identity()()
-  local img1 = inputs[1]
-  local img2 = inputs[2]
+  
+  local img1 = nn.Identity()()
+  local img2 = nn.Identity()()
+  local inputs = {img1, img2}
 --  local flowIn = nn.Identity()()
   
 
   -- stage 1 : filter bank -> squashing -> filter bank -> squashing
-  local h1_1 = img1 - nn.SpatialConvolution(6, 64, 7, 7, 2, 2, 3, 3)
+  local h1_0 = img1 - nn.SpatialConvolution(3, 64, 7, 7, 2, 2, 3, 3)
                     - nn.ReLU()
                     - nn.SpatialConvolution(64, 128, 5, 5, 2, 2, 2, 2)
                     - nn.ReLU()
-		    - nn.SpatialConvolution(128, 256, 5, 5, 2, 2, 2, 2)
+
+  local h1_1 = h1_0 - nn.SpatialConvolution(128, 256, 5, 5, 2, 2, 2, 2)
                     - nn.ReLU()
 
-  local h1_2 = img2 - nn.SpatialConvolution(6, 64, 7, 7, 2, 2, 3, 3)
+  local h1_2 = img2 - nn.SpatialConvolution(3, 64, 7, 7, 2, 2, 3, 3)
                     - nn.ReLU()
                     - nn.SpatialConvolution(64, 128, 5, 5, 2, 2, 2, 2)
                     - nn.ReLU()
@@ -88,7 +90,7 @@ function getModel()
   local DeCon4  = ConCat3 - nn.SpatialFullConvolution(386, 64, 4, 4, 2, 2, 1, 1)
                           - nn.ReLU()
 
-  local ConCat4 = nn.JoinTable(1)({h1_1, Con4_up, DeCon4})
+  local ConCat4 = nn.JoinTable(1)({h1_0, Con4_up, DeCon4})
 
   -- Final Convolution stage
   local Con5    = ConCat4 - nn.SpatialConvolution(194, 2, 3, 3, 1, 1, 1, 1)

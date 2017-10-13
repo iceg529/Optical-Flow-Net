@@ -10,10 +10,12 @@ function AvgEndPointError:__init()
 end
 
 function AvgEndPointError:updateOutput(input, target)
-   --print(input:size())
-   --print(target:size())
+   local ind = 1
    self.eucDistance = (input-target):pow(2)
-   self.output_tensor:add(self.eucDistance[1], self.eucDistance[2]):sqrt()
+   if self.eucDistance:size(2) == 2 then
+     ind = 2
+   end
+   self.output_tensor:add(self.eucDistance:select(ind,1), self.eucDistance:select(ind,2)):sqrt()
    --self.output_tensor = self.eucDistance:sum()
    --self.output_tensor = torch.sqrt(self.output_tensor)
    self.output = (self.output_tensor:sum())/(self.output_tensor:numel())
@@ -22,8 +24,8 @@ end
 
 function AvgEndPointError:updateGradInput(input, target)
    self.gradTemp:resizeAs(input)
-   self.gradTemp[1] = self.output_tensor
-   self.gradTemp[2] = self.gradTemp[1]
+   self.gradTemp[{{},1,{},{}}]:copy(self.output_tensor)
+   self.gradTemp[{{},2,{},{}}]:copy(self.output_tensor)
    self.gradInput = torch.cdiv((input-target), self.gradTemp)
    self.gradInput:div(self.output_tensor:numel())   
    return self.gradInput
