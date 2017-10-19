@@ -12,7 +12,8 @@ flowCh = np.empty([2, height*width])
 flowCh[0] = flowSample[0].flatten()
 flowCh[1] = flowSample[1].flatten()
 flowArray = flowCh.flatten('F')
-
+print(flowCh[0].min())
+print(flowCh[0].max())
 #print(flowArray.shape)
 
 #a = np.array([[1,2], [3,4]])

@@ -24,7 +24,7 @@ local opTshuffle = false
 local opTthreads = 3 -- 3 1
 local opTepoch = 1 
 local opTsnapshotInterval = 10
-local epIncrement = 50 --151, 0 
+local epIncrement = 130 --151, 0 
 local opTsave = "logFiles/residual"  -- "logFiles/correlation" "logFiles/finetuning" , "logFiles", "logFiles/newWithoutReg"
 local isTrain = true -- true false
 local isCorr = false -- true false
@@ -50,6 +50,7 @@ else
   require 'modelRes' -- 'model'
   require 'modelResSplit1'
   require 'modelResSplit2'
+  require 'modelResSplit3'
 end
 
 -- DataLoader objects take care of loading data from
@@ -122,10 +123,12 @@ downSampleFlowWeights:cuda()
 --local model = getModel()
 --local model = require('weight-init')(getResModel(), 'kaiming')
 --local model = torch.load('logFiles/residual/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- this is the model before finetuning with sintel
-local model = torch.load('logFiles/residual/res2/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- for res2 (addition of multiple disp)
 
-model = model
+local model = torch.load('logFiles/residual/res3/flownetLC1_LR3_' .. epIncrement .. '_Model.t7')
+--local model = torch.load('logFiles/residual/res2/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- for res2 (addition of multiple disp)
+
 local model2_1 = getResModel1():cuda()
+--local model2_3 = getResModel3():cuda()
 if model then
    --[[
    j = 2
@@ -137,9 +140,44 @@ if model then
    end
    --]]
 
-   modelParam,modelGradParam = model:getParameters()
+   --[[modelParam,modelGradParam = model:getParameters()
    modelParam2,modelGradParam2 = model2_1:getParameters()
-   modelParam2:copy(modelParam[{{1,modelParam2:size()[1]}}])
+   modelParam2:copy(modelParam[{{1,modelParam2:size()[1]}}])--]]
+
+   local conv_nodes = model:findModules('nn.SpatialConvolution')
+   local conv_nodes1 = model2_1:findModules('nn.SpatialConvolution')
+   --local conv_nodes3 = model2_3:findModules('nn.SpatialConvolution')
+   
+   print(#conv_nodes1)
+   for i = 1, #conv_nodes1 - 3 do
+	conv_nodes1[i].weight = conv_nodes[i].weight
+	conv_nodes1[i].bias = conv_nodes[i].bias
+   end
+   local j = #conv_nodes1 - 3
+   conv_nodes1[j+1].weight = conv_nodes[j+2].weight
+   conv_nodes1[j+1].bias = conv_nodes[j+2].bias
+   conv_nodes1[j+2].weight = conv_nodes[j+3].weight
+   conv_nodes1[j+2].bias = conv_nodes[j+3].bias
+   conv_nodes1[j+3].weight = conv_nodes[j+1].weight
+   conv_nodes1[j+3].bias = conv_nodes[j+1].bias
+
+   print(conv_nodes[j+1])
+   print(conv_nodes1[j+3])
+   
+   --[[j = #conv_nodes1
+   conv_nodes3[#conv_nodes3].weight = conv_nodes[j+1].weight
+   conv_nodes3[#conv_nodes3].bias = conv_nodes[j+1].bias
+   
+   print(#conv_nodes3)
+   for i = 1, #conv_nodes3 - 1 do
+ 	j = j+2
+	conv_nodes3[i].weight = conv_nodes[j].weight
+	conv_nodes3[i].bias = conv_nodes[j].bias
+   end--]]
+
+  --print(conv_nodes3[3])
+  --print(conv_nodes[#conv_nodes1 + 1])
+   
 end
 
 
@@ -248,12 +286,16 @@ while epoch<=opTepoch do
         tmpValFlow[i] = image.scale(flow[i],1024,448)
       end
       midInput = torch.cat(tmpValImg1, tmpValImg2, 2)
-      input = model2_1:forward(midInput:cuda())	      
+      input = model2_1:forward(midInput:cuda())
+      --[[input[1] = input[1]:cuda()
+      input[2] = input[2]:cuda()
+      input[3] = input[3]:cuda()
+      midFeat = model2_3:forward({input[1],input[2],input[3]})--]]	 	      
       flowInput =  tmpValFlow
     end
     t = t + thisBatchSize	    
     print('The data loaded till index ' .. data.indx)
-    print(input:size())
+    print(input[1]:size())
     torch.save('sintelFeat/sintelFeatures' .. cnt .. '.t7',input) -- cnt+226
     torch.save('sintelFeat/flow' .. cnt .. '.t7',flowInput) -- cnt+226
     cnt = cnt + 1

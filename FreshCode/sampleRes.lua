@@ -22,10 +22,10 @@ local opTval = 'testData_SintelClean.h5' --testData.h5 testData_SintelClean.h5
 local opTDataMode = 'sintel' -- chair or sintel
 local opTshuffle = false 
 local opTthreads = 3 -- 3 1
-local opTepoch = 10
-local opTsnapshotInterval = 10
-local epIncrement = 50 -- 151 -- 5, 0, 90, 240, 260 ...
-local opTsave = "logFiles/residual/res2"  -- "logFiles/correlation" "logFiles/finetuning" , "logFiles", "logFiles/newWithoutReg"
+local opTepoch = 15
+local opTsnapshotInterval = 5
+local epIncrement = 130 -- 50 for res2 -- 151 for simple residual before res2 
+local opTsave = "logFiles/residual/res3"  -- "logFiles/correlation" "logFiles/finetuning" , "logFiles", "logFiles/newWithoutReg"
 local isTrain = false -- true false
 local isCorr = false -- true false
 profiler = xlua.Profiler(false, true)
@@ -177,12 +177,13 @@ valLogger:display(false)
 
 -- Retrieve parameters and gradients:
 -- this extracts and flattens all the trainable parameters of the mode into a 1-dim vector
---local model = getModel()
+--local model = getResModel()
 --local model = require('weight-init')(getResModel(), 'kaiming')
 --local model = torch.load('logFiles/flownetLC6_LR3_5_Model.t7') -- this is the base model for most
 --local model = torch.load('logFiles/newWithoutReg/flownetLC8_LR3_240_Model.t7') -- or LC8_LR3_260_Model , one of the base model of augmented models
 
-local model = torch.load('logFiles/residual/res2/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- 'logFiles/flownetLC6_LR3_180_Model.t7' this is the model before finetuning with sintel
+--local model = torch.load('logFiles/residual/res2/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- res2
+local model = torch.load('logFiles/residual/res3/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- res3
 
 model = model:cuda()
 local criterion = nn.AvgEndPointError() --SmoothL1Criterion AvgEndPointError
@@ -244,7 +245,7 @@ if isTrain then
         local actualEp = epoch + epIncrement --+ 170
 
 	logmessage.display(0,'started training the model')
-	local config = {learningRate = (0.0001), --0.0001 0.1 0.000001 0.0001/16(for augment, since divided at earlier epochs in below lines)
+	local config = {learningRate = (0.00001), --0.0001 0.1 0.000001 0.0001/16(for augment, since divided at earlier epochs in below lines)
 		           weightDecay = 0.0004, --0.0004 0
 		           momentum = 0.9,
 		           learningRateDecay = 0 }--3e-5	
@@ -488,7 +489,9 @@ if isTrain then
 	-- if required, save snapshot at the end
 	saveModel(model, opTsave, snapshot_prefix, opTepoch)
 else
-	local models = {'residual/res2/flownetLC1_LR3_10_Model', 'residual/res2/flownetLC1_LR3_20_Model','residual/res2/flownetLC1_LR3_30_Model', 'residual/res2/flownetLC1_LR3_40_Model','residual/res2/flownetLC1_LR3_50_Model', 'residual/res2/flownetLC1_LR3_60_Model', 'residual/res2/flownetLC1_LR3_70_Model', 'residual/res2/flownetLC1_LR3_80_Model', 'residual/res2/flownetLC1_LR3_90_Model'}
+	local models = {'residual/res2/flownetLC1_LR3_40_Model','residual/res2/flownetLC1_LR3_50_Model','residual/res3/flownetLC1_LR3_10_Model', 'residual/res3/flownetLC1_LR3_50_Model','residual/res3/flownetLC1_LR3_55_Model','residual/res3/flownetLC1_LR3_60_Model','residual/res3/flownetLC1_LR3_65_Model', 'residual/res3/flownetLC1_LR3_70_Model','residual/res3/flownetLC1_LR3_75_Model','residual/res3/flownetLC1_LR3_95_Model', 'residual/res3/flownetLC1_LR3_100_Model', 'residual/res3/flownetLC1_LR3_105_Model','residual/res3/flownetLC1_LR3_110_Model', 'residual/res3/flownetLC1_LR3_115_Model', 'residual/res3/flownetLC1_LR3_120_Model','residual/res3/flownetLC1_LR3_125_Model','residual/res3/flownetLC1_LR3_130_Model', 'residual/res3/flownetLC1_LR3_135_Model', 'residual/res3/flownetLC1_LR3_140_Model','residual/res3/flownetLC1_LR3_145_Model'}
+
+--{'residual/res2/flownetLC1_LR3_10_Model', 'residual/res2/flownetLC1_LR3_20_Model','residual/res2/flownetLC1_LR3_30_Model', 'residual/res2/flownetLC1_LR3_40_Model','residual/res2/flownetLC1_LR3_50_Model', 'residual/res2/flownetLC1_LR3_60_Model', 'residual/res2/flownetLC1_LR3_70_Model', 'residual/res2/flownetLC1_LR3_80_Model', 'residual/res2/flownetLC1_LR3_90_Model'}
 
 
 --{'residual/flownetLC1_LR3_151_Model', 'residual/flownetLC1_LR3_161_Model','residual/flownetLC1_LR3_171_Model', 'residual/flownetLC1_LR3_181_Model','residual/flownetLC1_LR3_191_Model', 'residual/flownetLC1_LR3_201_Model'}

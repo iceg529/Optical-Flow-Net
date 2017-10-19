@@ -110,7 +110,7 @@ def sampleForColorCoding():
 	"""
 		
 	
-	data1 = np.transpose(np.asarray(misc.imread('../MPI-Sintel-complete/training/clean/bamboo_2/frame_0015.png')), (2,0,1)) #bamboo2 alley1
+	data1 = np.transpose(np.asarray(misc.imread('../MPI-Sintel-complete/training/clean/bamboo_2/frame_0015.png')), (2,0,1)) #bamboo_2 alley_1
         data2 = np.transpose(np.asarray(misc.imread('../MPI-Sintel-complete/training/clean/bamboo_2/frame_0016.png')), (2,0,1))
 	data3 = np.transpose(np.asarray(readFloToFile('../MPI-Sintel-complete/training/flow/bamboo_2/frame_0015.flo')), (0,2,1))
 	data4 = np.transpose(np.asarray(readFloToFile('FreshCode/Evaluate/sintel4_caffe.flo')), (0,2,1)) #sintel3_epic.flo
@@ -164,18 +164,19 @@ def createMeanImg():
 def writeSintelFeatures():
 	print('writing to file ...')
 	f = h5py.File("FreshCode/trainData_SintelFeatures.h5", 'w')
+	f2 = h5py.File("FreshCode/trainData_SintelFlowData.h5", 'w')
 	for i in range(1,227): #range(1,227) (227,453)
 		X_data = torchfile.load('FreshCode/sintelFeat/sintelFeatures'+str(i)+'.t7')
 		flo_data = torchfile.load('FreshCode/sintelFeat/flow'+str(i)+'.t7')
 		print(i)
 		dSetName = "/data"+str(i)
 		dSetName2 = "/flow"+str(i)
-		#dSetName3 = "/tmpflow"+str(i)
-		f.create_dataset(dSetName, data=X_data, compression='gzip', compression_opts=9)
-		f.create_dataset(dSetName2, data=flo_data, compression='gzip', compression_opts=9)
-		#f.create_dataset(dSetName3, data=X_data[1], compression='gzip', compression_opts=9)
+		dSetName3 = "/tmpflow"+str(i)
+		f.create_dataset(dSetName, data=X_data[0], compression='gzip', compression_opts=9)
+		f2.create_dataset(dSetName2, data=flo_data, compression='gzip', compression_opts=9)
+		f.create_dataset(dSetName3, data=X_data[1], compression='gzip', compression_opts=9)
   	f.close()
-
+	f2.close()
 
 
 #writeTestData()
