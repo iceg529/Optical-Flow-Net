@@ -22,10 +22,10 @@ local opTval = 'testData_SintelClean.h5' --testData.h5 testData_SintelClean.h5
 local opTDataMode = 'sintel' -- chair or sintel
 local opTshuffle = false 
 local opTthreads = 3 -- 3 1
-local opTepoch = 10 --50 --100 
-local opTsnapshotInterval = 5
-local epIncrement = 135 --130 -- 176 -- 151 221-- 
-local opTsave = "logFiles/residual/finetuning/res3" -- "logFiles/residual/finetuning/res2"  -- "logFiles/residual/finetuning/augm"  
+local opTepoch = 10 --20 --50 --100 
+local opTsnapshotInterval = 5 --5
+local epIncrement = 145 --160 --130 -- 176 -- 151 221-- 
+local opTsave = "logFiles/residual/finetuning/res4" -- "logFiles/residual/finetuning/res2"  -- "logFiles/residual/finetuning/augm"  
 local isTrain = false -- true false
 local isCorr = false -- true false
 profiler = xlua.Profiler(false, true)
@@ -188,7 +188,8 @@ valLogger:display(false)
 --local model = require('weight-init')(getResModel(), 'kaiming')
 --local model = torch.load('logFiles/flownetLC6_LR3_5_Model.t7') -- this is the base model for most
 
-local model = torch.load('logFiles/residual/finetuning/res3/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') 
+local model = torch.load('logFiles/residual/finetuning/res4/flownetLC1_LR3_' .. epIncrement .. '_Model.t7')
+--local model = torch.load('logFiles/residual/finetuning/res3/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') 
 --local model = torch.load('logFiles/residual/res3/flownetLC1_LR3_' .. epIncrement .. '_Model.t7')
 --local model = torch.load('logFiles/residual/res2/flownetLC1_LR3_' .. epIncrement .. '_Model.t7')
 --local model = torch.load('logFiles/residual/finetuning/augm/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') --  this is the model before finetuning with sintel
@@ -370,12 +371,13 @@ if isTrain then
 		local actualEp = epoch + epIncrement --+ 170
 
 		logmessage.display(0,'started training the model')
-		local config = {learningRate = (0.000001), --0.0001 0.1 0.000001 0.0001/16(for augment, since divided at earlier epochs in below lines)
+		local config = {learningRate = (0.000001),--0.000001(for 135-140) 0.00001(for 130-135) --0.0001 0.1 0.000001 0.0001/16(for augment, since divided at earlier epochs in below lines)
 				   weightDecay = 0.0004, --0.0004 0
 				   momentum = 0.9,
 				   learningRateDecay = 0 }--3e-5	
 
 		while epoch<=opTepoch do
+		  
 		  local time = sys.clock()  
 		  ------------------------------
 		  local NumBatches = 0
@@ -402,7 +404,7 @@ if isTrain then
 		  end--]]
 		  local sintelFeatFile
 		  local t = 1
-		  local cnt = 0
+		  local cnt = 0  --16
 		  while t <= trainSize do --trainSize
 		    --model:training()
 		    -- disp progress
@@ -631,7 +633,9 @@ if isTrain then
 		saveModel(model, opTsave, snapshot_prefix, opTepoch)
 	end 
 else
-	local models = {'residual/finetuning/flownetLC1_LR3_151_Model','residual/finetuning/flownetLC1_LR3_156_Model', 'residual/finetuning/augm/flownetLC1_LR3_156_Model', 'residual/finetuning/augm/flownetLC1_LR3_166_Model', 'residual/finetuning/augm/flownetLC1_LR3_171_Model', 'residual/finetuning/augm/flownetLC1_LR3_176_Model', 'residual/res3/flownetLC1_LR3_75_Model', 'residual/res3/flownetLC1_LR3_100_Model', 'residual/res3/flownetLC1_LR3_130_Model', 'residual/finetuning/res3/flownetLC1_LR3_135_Model', 'residual/finetuning/res3/flownetLC1_LR3_140_Model', 'residual/finetuning/res3/flownetLC1_LR3_145_Model', 'residual/finetuning/res3/flownetLC1_LR3_150_Model', 'residual/finetuning/res3/flownetLC1_LR3_155_Model', 'residual/finetuning/res3/flownetLC1_LR3_160_Model'}
+        local models = {'residual/res3/flownetLC1_LR3_130_Model(noAugAft100)', 'residual/finetuning/res3/flownetLC1_LR3_135_Model', 'residual/finetuning/res3/flownetLC1_LR3_140_Model', 'residual/finetuning/res3/flownetLC1_LR3_145_Model','residual/res4/flownetLC1_LR3_140_Model', 'residual/finetuning/res4/flownetLC1_LR3_145_Model', 'residual/finetuning/res4/flownetLC1_LR3_150_Model', 'residual/finetuning/res4/flownetLC1_LR3_155_Model', 'residual/finetuning/res4/flownetLC1_LR3_160_Model'}
+
+	--local models = {'residual/finetuning/flownetLC1_LR3_151_Model','residual/finetuning/flownetLC1_LR3_156_Model', 'residual/finetuning/augm/flownetLC1_LR3_156_Model', 'residual/finetuning/augm/flownetLC1_LR3_166_Model', 'residual/finetuning/augm/flownetLC1_LR3_171_Model', 'residual/finetuning/augm/flownetLC1_LR3_176_Model', 'residual/res3/flownetLC1_LR3_75_Model', 'residual/res3/flownetLC1_LR3_100_Model', 'residual/res3/flownetLC1_LR3_130_Model(noAugAft100)', 'residual/finetuning/res3/flownetLC1_LR3_135_Model', 'residual/finetuning/res3/flownetLC1_LR3_140_Model', 'residual/finetuning/res3/flownetLC1_LR3_145_Model', 'residual/finetuning/res3/flownetLC1_LR3_150_Model', 'residual/finetuning/res3/flownetLC1_LR3_155_Model', 'residual/finetuning/res3/flownetLC1_LR3_160_Model'}
 	
 	--local models = {'residual/finetuning/flownetLC1_LR3_151_Model','residual/finetuning/flownetLC1_LR3_156_Model', 'residual/finetuning/augm/flownetLC1_LR3_156_Model', 'residual/finetuning/augm/flownetLC1_LR3_166_Model', 'residual/finetuning/augm/flownetLC1_LR3_171_Model', 'residual/finetuning/augm/flownetLC1_LR3_176_Model', 'residual/res2/flownetLC1_LR3_40_Model', 'residual/res2/flownetLC1_LR3_50_Model', 'residual/finetuning/res2/flownetLC1_LR3_55_Model', 'residual/finetuning/res2/flownetLC1_LR3_60_Model', 'residual/finetuning/res2/flownetLC1_LR3_65_Model', 'residual/finetuning/res2/flownetLC1_LR3_70_Model', 'residual/finetuning/res2/flownetLC1_LR3_75_Model', 'residual/finetuning/res2/flownetLC1_LR3_80_Model'}
 

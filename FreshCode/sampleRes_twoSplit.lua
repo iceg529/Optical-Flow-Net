@@ -24,7 +24,7 @@ local opTshuffle = false
 local opTthreads = 3 -- 3 1
 local opTepoch = 1 
 local opTsnapshotInterval = 10
-local epIncrement = 130 --151, 0 
+local epIncrement = 140 --160 --151, 0 
 local opTsave = "logFiles/residual"  -- "logFiles/correlation" "logFiles/finetuning" , "logFiles", "logFiles/newWithoutReg"
 local isTrain = true -- true false
 local isCorr = false -- true false
@@ -124,8 +124,13 @@ downSampleFlowWeights:cuda()
 --local model = require('weight-init')(getResModel(), 'kaiming')
 --local model = torch.load('logFiles/residual/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- this is the model before finetuning with sintel
 
-local model = torch.load('logFiles/residual/res3/flownetLC1_LR3_' .. epIncrement .. '_Model.t7')
+local model = torch.load('logFiles/residual/res4/flownetLC1_LR3_' .. epIncrement .. '_Model.t7')
+--local model = torch.load('logFiles/residual/finetuning/res3/flownetLC1_LR3_' .. epIncrement .. '_Model.t7')
+--local model = torch.load('logFiles/residual/res3/flownetLC1_LR3_' .. epIncrement .. '_Model.t7')
 --local model = torch.load('logFiles/residual/res2/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- for res2 (addition of multiple disp)
+
+--local criterion = nn.AvgEndPointError() --SmoothL1Criterion AvgEndPointError
+--criterion = criterion:cuda()
 
 local model2_1 = getResModel1():cuda()
 --local model2_3 = getResModel3():cuda()
@@ -241,7 +246,12 @@ while epoch<=opTepoch do
   
   local t = 1
   local cnt = 1
-  while t <= trainSize do --trainSize
+  
+--[[local totalErr = 0
+  local theIndx = torch.Tensor(20):fill(0)
+  local tmpI = 0--]]
+
+  while t <= trainSize do --trainSize trainSize/226 
     --model:training()
     -- disp progress
     xlua.progress(t, trainSize)
@@ -252,7 +262,7 @@ while epoch<=opTepoch do
     while trainDataLoader:acceptsjob() do      
       local dataBatchSize = math.min(trainSize-dataLoaderIdx+1,trainBatchSize)
       if dataBatchSize > 0 and dataLoaderIdx < math.floor(trainSize/trainBatchSize)+1 then   --dataLoaderIdx < 2780 .. depends on batch size , (22232/batchSize)+1
-	trainDataLoader:scheduleNextBatch(dataBatchSize, dataLoaderIdx, data, true)
+	trainDataLoader:scheduleNextBatch(dataBatchSize, dataLoaderIdx, data, true) -- dataLoaderIdx 17
 	dataLoaderIdx = dataLoaderIdx + 1 --dataBatchSize
       else break end
     end
@@ -286,11 +296,7 @@ while epoch<=opTepoch do
         tmpValFlow[i] = image.scale(flow[i],1024,448)
       end
       midInput = torch.cat(tmpValImg1, tmpValImg2, 2)
-      input = model2_1:forward(midInput:cuda())
-      --[[input[1] = input[1]:cuda()
-      input[2] = input[2]:cuda()
-      input[3] = input[3]:cuda()
-      midFeat = model2_3:forward({input[1],input[2],input[3]})--]]	 	      
+      input = model2_1:forward(midInput:cuda())	 	      
       flowInput =  tmpValFlow
     end
     t = t + thisBatchSize	    
@@ -299,11 +305,43 @@ while epoch<=opTepoch do
     torch.save('sintelFeat/sintelFeatures' .. cnt .. '.t7',input) -- cnt+226
     torch.save('sintelFeat/flow' .. cnt .. '.t7',flowInput) -- cnt+226
     cnt = cnt + 1
+
+    --[[local testOut = model:forward(midInput:cuda())
+    local mod = nn.SpatialConvolution(2,2, 7, 7, 4,4,3,3) -- nn.SpatialConvolution(2,2,1, 1, 4, 4, 0, 0)
+    mod.weight = downSampleFlowWeights
+    mod.bias = torch.Tensor(2):fill(0)
+    mod = mod:cuda()
+    local down5 = mod:forward(tmpValFlow:cuda())
+    down5 = down5:cuda()
+
+    local tmpFlo1 = torch.Tensor(1,2,down5:size(3), down5:size(4))
+    local tmpFlo2 = torch.Tensor(1,2,down5:size(3), down5:size(4))
+    for i=1,8 do
+	    tmpFlo1[1]:copy(testOut[i])
+	    tmpFlo2[1]:copy(down5[i])
+	    local err =  criterion:forward(tmpFlo1:cuda(), tmpFlo2:cuda()) --criterion:forward(testOut:cuda(), down5:cuda())  criterion:forward(tmpFlo1:cuda(), tmpFlo2:cuda()) 
+	    print("Errr " .. err)
+    end
+    local err = criterion:forward(testOut:cuda(), down5:cuda())
+    if err <= 0.4 then
+	tmpI = tmpI + 1
+	theIndx[tmpI] = data.indx
+    end
+    totalErr = totalErr + err
+    local module = nn.SpatialUpSamplingBilinear(4):cuda()
+    predFinal = module:forward(down5[1]:cuda()) --]] --testOut[1] down5[1] 
     
     if math.fmod(NumBatches,10)==0 then
       collectgarbage()
     end
   end
+  
+  --[[print("True errr " .. totalErr/NumBatches)
+  torch.save('down.t7',predFinal) --]]
+
+  --[[for i =1,20 do
+    print("The index " .. theIndx[i])
+  end--]]
   
   ------------------------------
   -- time taken

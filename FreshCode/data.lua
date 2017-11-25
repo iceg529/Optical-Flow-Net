@@ -58,7 +58,7 @@ function DBSource:new (db_path, isTrain, shuffle)
     local dim, n_records
     if isTrain then
     	dim = myFile:read('/data1'):dataspaceSize()
-    	n_records = 904*2 -- 22232 904*2
+    	n_records = 22232 -- 22232 904*2
     else
         dim = myFile:read('/data1'):dataspaceSize()
     	n_records = dim[1] -- 640 137*1

@@ -22,12 +22,12 @@ local opTval = 'testData_SintelClean.h5' --testData.h5 testData_SintelClean.h5
 local opTDataMode = 'sintel' -- chair or sintel
 local opTshuffle = false 
 local opTthreads = 3 -- 3 1
-local opTepoch = 15
+local opTepoch = 25
 local opTsnapshotInterval = 5
-local epIncrement = 130 -- 50 for res2 -- 151 for simple residual before res2 
-local opTsave = "logFiles/residual/res3"  -- "logFiles/correlation" "logFiles/finetuning" , "logFiles", "logFiles/newWithoutReg"
+local epIncrement = 20 --130 --85 --110 -- 50 for res2 -- 151 for simple residual before res2 
+local opTsave = "logFiles/residual/plain"  -- "logFiles/correlation" "logFiles/finetuning" , "logFiles", "logFiles/newWithoutReg"
 local isTrain = false -- true false
-local isCorr = false -- true false
+local isPlain = true -- true false
 profiler = xlua.Profiler(false, true)
 
 require 'logmessage'
@@ -44,8 +44,8 @@ torch.setnumthreads(opTthreads)
 -- optionally: validation database 
 
 require 'data'
-if isCorr then 
-  require 'modelCorr'
+if isPlain then 
+  require 'modelPlain'
 else
   require 'modelRes' -- 'model'
 end
@@ -183,7 +183,9 @@ valLogger:display(false)
 --local model = torch.load('logFiles/newWithoutReg/flownetLC8_LR3_240_Model.t7') -- or LC8_LR3_260_Model , one of the base model of augmented models
 
 --local model = torch.load('logFiles/residual/res2/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- res2
-local model = torch.load('logFiles/residual/res3/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- res3
+--local model = torch.load('logFiles/residual/res3/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- res3
+--local model = torch.load('logFiles/residual/res4/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- res4
+local model = torch.load('logFiles/residual/plain/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- res4
 
 model = model:cuda()
 local criterion = nn.AvgEndPointError() --SmoothL1Criterion AvgEndPointError
@@ -245,7 +247,7 @@ if isTrain then
         local actualEp = epoch + epIncrement --+ 170
 
 	logmessage.display(0,'started training the model')
-	local config = {learningRate = (0.00001), --0.0001 0.1 0.000001 0.0001/16(for augment, since divided at earlier epochs in below lines)
+	local config = {learningRate = (0.0001), --0.0001 0.1 0.000001 0.0001/16(for augment, since divided at earlier epochs in below lines)
 		           weightDecay = 0.0004, --0.0004 0
 		           momentum = 0.9,
 		           learningRateDecay = 0 }--3e-5	
@@ -346,11 +348,10 @@ if isTrain then
 	      -- remove from this line till above for loop
 	      flowInput = flowInput:cuda()
               input = input:cuda()		
-	      if isCorr then
-		output = model:forward({input:sub(1,3), input:sub(4,6)})		
-	      else
- 		output = model:forward(input)
-	      end
+	      --if isCorr then
+		--output = model:forward({input:sub(1,3), input:sub(4,6)})		
+	      
+ 	      output = model:forward(input)
 		
 	      local mod = nn.SpatialConvolution(2,2, 7, 7, 4,4,3,3) -- nn.SpatialConvolution(2,2,1, 1, 4, 4, 0, 0)
 	      mod.weight = downSampleFlowWeights
@@ -489,7 +490,13 @@ if isTrain then
 	-- if required, save snapshot at the end
 	saveModel(model, opTsave, snapshot_prefix, opTepoch)
 else
-	local models = {'residual/res2/flownetLC1_LR3_40_Model','residual/res2/flownetLC1_LR3_50_Model','residual/res3/flownetLC1_LR3_10_Model', 'residual/res3/flownetLC1_LR3_50_Model','residual/res3/flownetLC1_LR3_55_Model','residual/res3/flownetLC1_LR3_60_Model','residual/res3/flownetLC1_LR3_65_Model', 'residual/res3/flownetLC1_LR3_70_Model','residual/res3/flownetLC1_LR3_75_Model','residual/res3/flownetLC1_LR3_95_Model', 'residual/res3/flownetLC1_LR3_100_Model', 'residual/res3/flownetLC1_LR3_105_Model','residual/res3/flownetLC1_LR3_110_Model', 'residual/res3/flownetLC1_LR3_115_Model', 'residual/res3/flownetLC1_LR3_120_Model','residual/res3/flownetLC1_LR3_125_Model','residual/res3/flownetLC1_LR3_130_Model', 'residual/res3/flownetLC1_LR3_135_Model', 'residual/res3/flownetLC1_LR3_140_Model','residual/res3/flownetLC1_LR3_145_Model'}
+  local models = {'residual/res4/flownetLC1_LR3_10_Model','residual/res4/flownetLC1_LR3_20_Model','residual/plain/flownetLC1_LR3_10_Model','residual/plain/flownetLC1_LR3_20_Model','residual/plain/flownetLC1_LR3_25_Model','residual/plain/flownetLC1_LR3_30_Model','residual/plain/flownetLC1_LR3_35_Model','residual/plain/flownetLC1_LR3_40_Model','residual/plain/flownetLC1_LR3_45_Model'}
+
+  --local models = {'residual/res4/flownetLC1_LR3_10_Model','residual/res4/flownetLC1_LR3_20_Model','residual/res4/flownetLC1_LR3_30_Model','residual/res3/flownetLC1_LR3_10_Model','residual/res3/flownetLC1_LR3_20_Model'}	
+
+--local models = {'residual/res4/flownetLC1_LR3_70_Model','residual/res4/flownetLC1_LR3_75_Model','residual/res4/flownetLC1_LR3_80_Model','residual/res4/flownetLC1_LR3_85_Model','residual/res4/flownetLC1_LR3_100_Model','residual/res4/flownetLC1_LR3_120_Model','residual/res4/flownetLC1_LR3_130_Model','residual/res4/flownetLC1_LR3_135_Model','residual/res4/flownetLC1_LR3_140_Model','residual/res4/flownetLC1_LR3_145_Model','residual/res4/flownetLC1_LR3_155_Model','residual/res4/flownetLC1_LR3_160_Model','residual/res4/flownetLC1_LR3_165_Model','residual/res4/flownetLC1_LR3_170_Model','residual/res3/flownetLC1_LR3_60_Model','residual/res3/flownetLC1_LR3_65_Model', 'residual/res3/flownetLC1_LR3_70_Model','residual/res3/flownetLC1_LR3_75_Model','residual/res3/flownetLC1_LR3_130_Model', 'residual/res3/flownetLC1_LR3_130_Model(noAugAft100)'}
+
+--local models = {'residual/res2/flownetLC1_LR3_40_Model','residual/res2/flownetLC1_LR3_50_Model','residual/res3/flownetLC1_LR3_10_Model', 'residual/res3/flownetLC1_LR3_50_Model','residual/res3/flownetLC1_LR3_55_Model','residual/res3/flownetLC1_LR3_60_Model','residual/res3/flownetLC1_LR3_65_Model', 'residual/res3/flownetLC1_LR3_70_Model','residual/res3/flownetLC1_LR3_75_Model','residual/res3/flownetLC1_LR3_95_Model', 'residual/res3/flownetLC1_LR3_100_Model', 'residual/res3/flownetLC1_LR3_105_Model','residual/res3/flownetLC1_LR3_110_Model', 'residual/res3/flownetLC1_LR3_115_Model', 'residual/res3/flownetLC1_LR3_120_Model','residual/res3/flownetLC1_LR3_125_Model','residual/res3/flownetLC1_LR3_130_Model', 'residual/res3/flownetLC1_LR3_130_Model(noAugAft100)'}
 
 --{'residual/res2/flownetLC1_LR3_10_Model', 'residual/res2/flownetLC1_LR3_20_Model','residual/res2/flownetLC1_LR3_30_Model', 'residual/res2/flownetLC1_LR3_40_Model','residual/res2/flownetLC1_LR3_50_Model', 'residual/res2/flownetLC1_LR3_60_Model', 'residual/res2/flownetLC1_LR3_70_Model', 'residual/res2/flownetLC1_LR3_80_Model', 'residual/res2/flownetLC1_LR3_90_Model'}
 

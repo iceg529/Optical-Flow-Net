@@ -220,11 +220,19 @@ function getResModel()
   --                           - nn.SpatialUpSamplingBilinear(2)
 
   -- additions Res 3
+  --local flowDisp3    = nn.JoinTable(2)({flowDisp2, h14_0, h16_1}) - nn.SpatialConvolution(514, 2, 3, 3, 1, 1, 1, 1)
+	--						         - nn.SpatialUpSamplingBilinear(2)
+
+  -- additions Res 4
   local flowDisp3    = nn.JoinTable(2)({flowDisp2, h14_0, h16_1}) - nn.SpatialConvolution(514, 2, 3, 3, 1, 1, 1, 1)
-							         - nn.SpatialUpSamplingBilinear(2)
+							         
+  -- additions Res 4
+  local flowDisp3_1    = nn.JoinTable(2)({flowDisp1, flowDisp2, flowDisp3}) - nn.SpatialConvolution(6, 2, 3, 3, 1, 1, 1, 1)
+									    - nn.SpatialUpSamplingBilinear(2)
 
   -- Final Convolution stage
-  local Con5 = flowDisp3
+  local Con5 = flowDisp3_1  --flowDisp3
+
   --local Con5 = nn.CAddTable()({flowDisp1, flowDisp2, flowDisp3}) -- this line for res2
   --[[local Con5    = h16_1 - nn.SpatialConvolution(256, 2, 3, 3, 1, 1, 1, 1)
                         - nn.SpatialUpSamplingBilinear(2)--]]
