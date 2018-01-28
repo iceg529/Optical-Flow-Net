@@ -58,7 +58,7 @@ function DBSource:new (db_path, isTrain, shuffle)
     local dim, n_records
     if isTrain then
     	dim = myFile:read('/data1'):dataspaceSize()
-    	n_records = 22232 -- 22232 904*2
+    	n_records = 904*1 -- 22232 904*2 904*1
     else
         dim = myFile:read('/data1'):dataspaceSize()
     	n_records = dim[1] -- 640 137*1
@@ -273,7 +273,7 @@ function DataLoader:scheduleNextBatch(batchSize, dataIdx, dataTable)
                 function(batchSize, in1, in2, out, indx)
                     -- executes in main thread
                     
-		    --[[profiler:start('augmentation process')		    
+		   --[[ profiler:start('augmentation process')		    
 	 	    ----- augmentation ----------	    
 		    if torch.bernoulli(0.5) == 1 then  -- 0.5
 	 	      print('in affine')

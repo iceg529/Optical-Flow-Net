@@ -17,16 +17,16 @@ if dir_path ~= nil then
   package.path = dir_path .."?.lua;".. package.path
 end
 
-local opTtrain = 'trainData_Sintel.h5' --trainData.h5 trainData_16.h5 trainData_Sintel.h5
+local opTtrain = 'trainData_SintelClean.h5' --trainData.h5 trainData_16.h5 trainData_Sintel.h5 trainData_SintelClean.h5 trainData_SintelFinal.h5
 local opTval = 'testData_SintelClean.h5' --testData.h5 testData_SintelClean.h5
 local opTDataMode = 'sintel' -- chair or sintel
 local opTshuffle = false 
 local opTthreads = 3 -- 3 1
-local opTepoch = 10 --20 --50 --100 
-local opTsnapshotInterval = 5 --5
-local epIncrement = 145 --160 --130 -- 176 -- 151 221-- 
-local opTsave = "logFiles/residual/finetuning/res4" -- "logFiles/residual/finetuning/res2"  -- "logFiles/residual/finetuning/augm"  
-local isTrain = false -- true false
+local opTepoch = 1 --20 --50 --100 
+local opTsnapshotInterval = 1 --5
+local epIncrement = 0 --140 --160 --130 -- 176 -- 151 221-- 
+local opTsave = "logFiles/residual/res2" --"logFiles/residual/finetuning/res4" -- "logFiles/residual/finetuning/res2"  -- "logFiles/residual/finetuning/augm"  
+local isTrain = true -- true false
 local isCorr = false -- true false
 profiler = xlua.Profiler(false, true)
 
@@ -188,11 +188,14 @@ valLogger:display(false)
 --local model = require('weight-init')(getResModel(), 'kaiming')
 --local model = torch.load('logFiles/flownetLC6_LR3_5_Model.t7') -- this is the base model for most
 
-local model = torch.load('logFiles/residual/finetuning/res4/flownetLC1_LR3_' .. epIncrement .. '_Model.t7')
+--local model = torch.load('logFiles/residual/finetuning/res5/flownetLC1_LR3_' .. epIncrement .. '_Model.t7')
+--local model = torch.load('logFiles/residual/finetuning/res4/flownetLC1_LR3_' .. epIncrement .. '_Model.t7')
 --local model = torch.load('logFiles/residual/finetuning/res3/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') 
 --local model = torch.load('logFiles/residual/res3/flownetLC1_LR3_' .. epIncrement .. '_Model.t7')
 --local model = torch.load('logFiles/residual/res2/flownetLC1_LR3_' .. epIncrement .. '_Model.t7')
 --local model = torch.load('logFiles/residual/finetuning/augm/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') --  this is the model before finetuning with sintel
+
+local model = torch.load('logFiles/residual/res4/flownetLC1_LR3_140_Model.t7') -- to fill table
 
 --model = model:cuda()
 local criterion = nn.AvgEndPointError() --SmoothL1Criterion AvgEndPointError
@@ -371,7 +374,7 @@ if isTrain then
 		local actualEp = epoch + epIncrement --+ 170
 
 		logmessage.display(0,'started training the model')
-		local config = {learningRate = (0.000001),--0.000001(for 135-140) 0.00001(for 130-135) --0.0001 0.1 0.000001 0.0001/16(for augment, since divided at earlier epochs in below lines)
+		local config = {learningRate = (0.00001),--0.000001(for 135-140) 0.00001(for 130-135) --0.0001 0.1 0.000001 0.0001/16(for augment, since divided at earlier epochs in below lines)
 				   weightDecay = 0.0004, --0.0004 0
 				   momentum = 0.9,
 				   learningRateDecay = 0 }--3e-5	
@@ -498,9 +501,9 @@ if isTrain then
 		      local err = criterion:forward(output, down5) --grdTruth
 		      f = f + err
 			-- estimate df/dW
-		      local df_do = criterion:backward(output, down5) --grdTruth
-		      --model2_2:backward(input, df_do)	    
-		      model2_2:backward({input,flowDisp1}, df_do)	      
+		      --local df_do = criterion:backward(output, down5) --grdTruth
+		      --model2_2:backward({input,flowDisp1}, df_do)
+		      -- uncomment above two	      
 	
 		      -- evaluate function for complete mini batch
 		      --[[for i = 1,im1:size(1) do
@@ -633,11 +636,13 @@ if isTrain then
 		saveModel(model, opTsave, snapshot_prefix, opTepoch)
 	end 
 else
-        local models = {'residual/res3/flownetLC1_LR3_130_Model(noAugAft100)', 'residual/finetuning/res3/flownetLC1_LR3_135_Model', 'residual/finetuning/res3/flownetLC1_LR3_140_Model', 'residual/finetuning/res3/flownetLC1_LR3_145_Model','residual/res4/flownetLC1_LR3_140_Model', 'residual/finetuning/res4/flownetLC1_LR3_145_Model', 'residual/finetuning/res4/flownetLC1_LR3_150_Model', 'residual/finetuning/res4/flownetLC1_LR3_155_Model', 'residual/finetuning/res4/flownetLC1_LR3_160_Model'}
+	local models = {'residual/finetuning/res5/flownetLC1_LR3_140_Model', 'residual/finetuning/res5/flownetLC1_LR3_145_Model','residual/finetuning/res5/flownetLC1_LR3_150_Model', 'residual/finetuning/res5/flownetLC1_LR3_155_Model','residual/finetuning/res5/flownetLC1_LR3_160_Model', 'residual/finetuning/res5/flownetLC1_LR3_165_Model','residual/finetuning/res5/flownetLC1_LR3_170_Model', 'residual/finetuning/res5/flownetLC1_LR3_141_Model','residual/finetuning/res5/flownetLC1_LR3_142_Model', 'residual/finetuning/res5/flownetLC1_LR3_143_Model','residual/finetuning/res5/flownetLC1_LR3_144_Model', 'residual/finetuning/res5/flownetLC1_LR3_146_Model','residual/finetuning/res5/flownetLC1_LR3_147_Model', 'residual/finetuning/res5/flownetLC1_LR3_148_Model','residual/finetuning/res5/flownetLC1_LR3_149_Model'}
+        
+	--local models = {'residual/res3/flownetLC1_LR3_130_Model(noAugAft100)', 'residual/finetuning/res3/flownetLC1_LR3_135_Model', 'residual/finetuning/res3/flownetLC1_LR3_140_Model', 'residual/finetuning/res3/flownetLC1_LR3_145_Model','residual/res4/flownetLC1_LR3_140_Model', 'residual/finetuning/res4/flownetLC1_LR3_145_Model', 'residual/finetuning/res4/flownetLC1_LR3_150_Model', 'residual/finetuning/res4/flownetLC1_LR3_155_Model', 'residual/finetuning/res4/flownetLC1_LR3_160_Model'}
 
 	--local models = {'residual/finetuning/flownetLC1_LR3_151_Model','residual/finetuning/flownetLC1_LR3_156_Model', 'residual/finetuning/augm/flownetLC1_LR3_156_Model', 'residual/finetuning/augm/flownetLC1_LR3_166_Model', 'residual/finetuning/augm/flownetLC1_LR3_171_Model', 'residual/finetuning/augm/flownetLC1_LR3_176_Model', 'residual/res3/flownetLC1_LR3_75_Model', 'residual/res3/flownetLC1_LR3_100_Model', 'residual/res3/flownetLC1_LR3_130_Model(noAugAft100)', 'residual/finetuning/res3/flownetLC1_LR3_135_Model', 'residual/finetuning/res3/flownetLC1_LR3_140_Model', 'residual/finetuning/res3/flownetLC1_LR3_145_Model', 'residual/finetuning/res3/flownetLC1_LR3_150_Model', 'residual/finetuning/res3/flownetLC1_LR3_155_Model', 'residual/finetuning/res3/flownetLC1_LR3_160_Model'}
 	
-	--local models = {'residual/finetuning/flownetLC1_LR3_151_Model','residual/finetuning/flownetLC1_LR3_156_Model', 'residual/finetuning/augm/flownetLC1_LR3_156_Model', 'residual/finetuning/augm/flownetLC1_LR3_166_Model', 'residual/finetuning/augm/flownetLC1_LR3_171_Model', 'residual/finetuning/augm/flownetLC1_LR3_176_Model', 'residual/res2/flownetLC1_LR3_40_Model', 'residual/res2/flownetLC1_LR3_50_Model', 'residual/finetuning/res2/flownetLC1_LR3_55_Model', 'residual/finetuning/res2/flownetLC1_LR3_60_Model', 'residual/finetuning/res2/flownetLC1_LR3_65_Model', 'residual/finetuning/res2/flownetLC1_LR3_70_Model', 'residual/finetuning/res2/flownetLC1_LR3_75_Model', 'residual/finetuning/res2/flownetLC1_LR3_80_Model'}
+	--local models = {'residual/finetuning/flownetLC1_LR3_151_Model','residual/finetuning/flownetLC1_LR3_156_Model', 'residual/finetuning/augm/flownetLC1_LR3_156_Model', 'residual/finetuning/augm/flownetLC1_LR3_166_Model', 'residual/finetuning/augm/flownetLC1_LR3_171_Model', 'residual/finetuning/augm/flownetLC1_LR3_176_Model', 'residual/res2/flownetLC1_LR3_40_Model', 'residual/res2/flownetLC1_LR3_50_Model', 'residual/finetuning/res2/flownetLC1_LR3_55_Model', 'residual/finetuning/res2/flownetLC1_LR3_60_Model', 'residual/finetuning/res2/flownetLC1_LR3_65_Model', 'residual/finetuning/res2/flownetLC1_LR3_70_Model', 'residual/finetuning/res2/flownetLC1_LR3_75_Model', 'residual/finetuning/res2/flownetLC1_LR3_80_Model', 'residual/finetuning/res2/flownetLC1_LR3_90_Model', 'residual/finetuning/res2/flownetLC1_LR3_100_Model'}
 
 --	local models = {'residual/finetuning/flownetLC1_LR3_151_Model','residual/finetuning/flownetLC1_LR3_156_Model', 'residual/finetuning/augm/flownetLC1_LR3_156_Model', 'residual/finetuning/augm/flownetLC1_LR3_166_Model', 'residual/finetuning/augm/flownetLC1_LR3_171_Model', 'residual/finetuning/augm/flownetLC1_LR3_176_Model', 'residual/finetuning/augm/flownetLC1_LR3_181_Model', 'residual/finetuning/augm/flownetLC1_LR3_186_Model', 'residual/finetuning/augm/flownetLC1_LR3_191_Model', 'residual/finetuning/augm/flownetLC1_LR3_196_Model', 'residual/finetuning/flownetLC1_LR3_226_Model'}
 

@@ -48,7 +48,7 @@ function getResModel()
                   - nn.SpatialConvolution(64, 64, 3, 3, 1, 1, 1, 1)
 		  - nn.ReLU()
 
-  local h5_1 = nn.CAddTable()({h5, h4_1})               
+  local h5_1 = nn.CAddTable()({h5, h4_1})             
 
   -- stage 6 : filter bank -> squashing -> filter bank -> squashing
   local h6 = h5_1 - nn.SpatialConvolution(64, 64, 3, 3, 1, 1, 1, 1)
@@ -68,8 +68,13 @@ function getResModel()
   --local flowDisp1    = h6_0 - nn.SpatialConvolution(64, 2, 3, 3, 1, 1, 1, 1)
 
   -- additions Res 3
-  local flowDisp1    = nn.JoinTable(2)({h1, h4_0, h6_0}) - nn.SpatialConvolution(192, 2, 3, 3, 1, 1, 1, 1)
-							 - nn.SpatialMaxPooling(2, 2, 2, 2)
+  --local flowDisp1    = nn.JoinTable(2)({h1, h4_0, h6_0}) - nn.SpatialConvolution(192, 2, 3, 3, 1, 1, 1, 1)
+	--						 - nn.SpatialMaxPooling(2, 2, 2, 2)
+
+  -- additions Res 5
+  --local flowDisp1    = nn.JoinTable(2)({h1, h4_0, h6_0}) - nn.SpatialConvolution(192, 2, 3, 3, 1, 1, 1, 1)
+	--						 - nn.SpatialMaxPooling(2, 2, 2, 2)
+
   --------------------------
   
   -- stage 7 : filter bank -> squashing -> filter bank -> squashing
@@ -103,7 +108,7 @@ function getResModel()
                    - nn.SpatialConvolution(128, 128, 3, 3, 1, 1, 1, 1)
 		   - nn.ReLU()
 
-  local h10_1 = nn.CAddTable()({h10, h9_1})                
+  local h10_1 = nn.CAddTable()({h10, h9_1})      
 
   -- stage 11 : filter bank -> squashing -> filter bank -> squashing
   local h11 = h10_1 - nn.SpatialConvolution(128, 128, 3, 3, 1, 1, 1, 1)
@@ -122,7 +127,10 @@ function getResModel()
   --                           - nn.SpatialUpSamplingBilinear(2)
 
   -- additions Res 3
-  local flowDisp2    = nn.JoinTable(2)({flowDisp1, h9_0, h11_1}) - nn.SpatialConvolution(258, 2, 3, 3, 1, 1, 1, 1)
+  --local flowDisp2    = nn.JoinTable(2)({flowDisp1, h9_0, h11_1}) - nn.SpatialConvolution(258, 2, 3, 3, 1, 1, 1, 1)
+
+  -- additions Res 5
+  --local flowDisp2    = nn.JoinTable(2)({flowDisp1, h9_0, h11_1}) - nn.SpatialConvolution(258, 2, 3, 3, 1, 1, 1, 1)
 
   ---------------------------
 
@@ -158,7 +166,8 @@ function getResModel()
 		    - nn.ReLU()
 
   local h15_1 = nn.CAddTable()({h15, h14_1})
-                
+  
+  -- commented till h16_1 for Res 5              
   -- stage 16 : filter bank -> squashing -> filter bank -> squashing
   local h16 = h15_1 - nn.SpatialConvolution(256, 256, 3, 3, 1, 1, 1, 1)
                     - nn.ReLU()
@@ -166,6 +175,7 @@ function getResModel()
 		    - nn.ReLU()
 
   local h16_1 = nn.CAddTable()({h16, h15_1})
+
                 
 	--[[	- nn.SpatialMaxPooling(2, 2, 2, 2)
   local h16_2 = h16_1 - nn.Copy(cudaTensor, cudaTensor)
@@ -224,11 +234,31 @@ function getResModel()
 	--						         - nn.SpatialUpSamplingBilinear(2)
 
   -- additions Res 4
-  local flowDisp3    = nn.JoinTable(2)({flowDisp2, h14_0, h16_1}) - nn.SpatialConvolution(514, 2, 3, 3, 1, 1, 1, 1)
+  --local flowDisp3    = nn.JoinTable(2)({flowDisp2, h14_0, h16_1}) - nn.SpatialConvolution(514, 2, 3, 3, 1, 1, 1, 1)
 							         
   -- additions Res 4
-  local flowDisp3_1    = nn.JoinTable(2)({flowDisp1, flowDisp2, flowDisp3}) - nn.SpatialConvolution(6, 2, 3, 3, 1, 1, 1, 1)
-									    - nn.SpatialUpSamplingBilinear(2)
+  --local flowDisp3_1    = nn.JoinTable(2)({flowDisp1, flowDisp2, flowDisp3}) - nn.SpatialConvolution(6, 2, 3, 3, 1, 1, 1, 1)
+	--								    - nn.SpatialUpSamplingBilinear(2)
+
+  -- additions Res 5
+  --local flowDisp3    = nn.JoinTable(2)({flowDisp2, h14_0, h16_1}) - nn.SpatialConvolution(514, 2, 3, 3, 1, 1, 1, 1)
+
+  --[[local flowDisp3_1    = nn.JoinTable(2)({flowDisp1, flowDisp2, flowDisp3}) - nn.SpatialConvolution(6, 100, 3, 3, 1, 1, 1, 1)
+									    - nn.SpatialConvolution(100, 50, 3, 3, 1, 1, 1, 1)
+									    - nn.SpatialConvolution(50, 20, 3, 3, 1, 1, 1, 1)
+									    - nn.SpatialConvolution(20, 2, 3, 3, 1, 1, 1, 1)
+									    - nn.SpatialUpSamplingBilinear(2) --]]
+  -- additions Res 7
+  local flowDisp1    = h16_1 - nn.SpatialConvolution(256, 2, 3, 3, 1, 1, 1, 1)
+	--		     - nn.SpatialUpSamplingBilinear(2)
+
+  local flowDisp2    = nn.JoinTable(2)({flowDisp1, h11_1}) - nn.SpatialConvolution(130, 2, 3, 3, 1, 1, 1, 1)
+
+  local flowDisp2_1 = nn.CAddTable()({flowDisp1, flowDisp2}) -- - nn.SpatialUpSamplingBilinear(2) 							   
+  local flowDisp3    = nn.JoinTable(2)({flowDisp2_1, h6_1}) - nn.SpatialConvolution(66, 2, 3, 3, 1, 1, 1, 1)
+
+  local flowDisp3_1 = nn.CAddTable()({flowDisp2_1, flowDisp3}) - nn.SpatialUpSamplingBilinear(2)
+
 
   -- Final Convolution stage
   local Con5 = flowDisp3_1  --flowDisp3

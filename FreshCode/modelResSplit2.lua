@@ -163,6 +163,15 @@ function getResModel2()
   local flowDisp3_1    = nn.JoinTable(2)({flowDisp1, flowDisp2, flowDisp3}) - nn.SpatialConvolution(6, 2, 3, 3, 1, 1, 1, 1)
 									    - nn.SpatialUpSamplingBilinear(2)
 
+  -- additions Res 5
+  --[[local flowDisp3    = nn.JoinTable(2)({flowDisp2, h14_0, h16_1}) - nn.SpatialConvolution(514, 2, 3, 3, 1, 1, 1, 1)
+
+  local flowDisp3_1    = nn.JoinTable(2)({flowDisp1, flowDisp2, flowDisp3}) - nn.SpatialConvolution(6, 100, 3, 3, 1, 1, 1, 1)
+									    - nn.SpatialConvolution(100, 50, 3, 3, 1, 1, 1, 1)
+									    - nn.SpatialConvolution(50, 20, 3, 3, 1, 1, 1, 1)
+									    - nn.SpatialConvolution(20, 2, 3, 3, 1, 1, 1, 1)
+									    - nn.SpatialUpSamplingBilinear(2)--]]
+ 
   -- Final Convolution stage
   local Con5 = flowDisp3_1  --flowDisp3
 

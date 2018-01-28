@@ -1,4 +1,6 @@
 
+-- same copy as that of sampleRes .. created just to run separately in 2 systems
+
 require 'image'
 require 'torch'
 require 'xlua'
@@ -17,17 +19,17 @@ if dir_path ~= nil then
   package.path = dir_path .."?.lua;".. package.path
 end
 
-local opTtrain = 'trainData_SintelClean.h5' --trainData.h5 trainData_Sintel.h5 trainData_SintelClean.h5 trainData_SintelFinal.h5
-local opTval = 'trainData_SintelFinal2.h5' --testData.h5 testData_SintelClean.h5 testData_SintelFinal.h5
-local opTDataMode = 'sintel' -- chair or sintel
+local opTtrain = 'trainData.h5' --trainData.h5 trainData_16.h5 trainData_Sintel.h5
+local opTval = 'testData.h5' --testData.h5 testData_SintelClean.h5
+local opTDataMode = 'chair' -- chair or sintel
 local opTshuffle = false 
 local opTthreads = 3 -- 3 1
-local opTepoch = 1
-local opTsnapshotInterval = 1
-local epIncrement = 0 --169 --130 --85 --110 -- 50 for res2 -- 151 for simple residual before res2 
-local opTsave = "logFiles/residual/res2"  -- "logFiles/correlation" "logFiles/finetuning" , "logFiles", "logFiles/newWithoutReg"
+local opTepoch = 20
+local opTsnapshotInterval = 5
+local epIncrement = 40 --130 --85 --110 -- 50 for res2 -- 151 for simple residual before res2 
+local opTsave = "logFiles/residual/plain"  -- "logFiles/correlation" "logFiles/finetuning" , "logFiles", "logFiles/newWithoutReg"
 local isTrain = false -- true false
-local isPlain = false -- true false
+local isPlain = true -- true false
 profiler = xlua.Profiler(false, true)
 
 require 'logmessage'
@@ -48,7 +50,6 @@ if isPlain then
   require 'modelPlain'
 else
   require 'modelRes' -- 'model'
-  --require 'modelResFlownet' --res6
 end
 
 -- DataLoader objects take care of loading data from
@@ -186,17 +187,14 @@ valLogger:display(false)
 --local model = torch.load('logFiles/residual/res2/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- res2
 --local model = torch.load('logFiles/residual/res3/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- res3
 --local model = torch.load('logFiles/residual/res4/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- res4
---local model = torch.load('logFiles/residual/plain/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- res4
+local model = torch.load('logFiles/residual/plain/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- res4
 --local model = torch.load('logFiles/residual/res5/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- res5
---local model = torch.load('logFiles/residual/res6/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- res6
---local model = torch.load('logFiles/residual/res7/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- res7
-local model = torch.load('logFiles/residual/finetuning/res4/flownetLC1_LR3_145_Model.t7') -- to fill table
 
 model = model:cuda()
 local criterion = nn.AvgEndPointError() --SmoothL1Criterion AvgEndPointError
 criterion = criterion:cuda()
 if model then
-   --[[for i=1, (model:size() - 3) do
+   --[[for i=1, (model:size() - 10) do
      model:get(i).parameters = function() return nil end -- freezes the layer when using optim 
      model:get(i).accGradParameters = function() end -- overwrite this to reduce computations
    end--]]
@@ -251,7 +249,7 @@ if isTrain then
         local actualEp = epoch + epIncrement --+ 170
 
 	logmessage.display(0,'started training the model')
-	local config = {learningRate = (0.00000001), --0.0001 0.1 0.000001 0.0001/16(for augment, since divided at earlier epochs in below lines)
+	local config = {learningRate = (0.0001), --0.0001 0.1 0.000001 0.0001/16(for augment, since divided at earlier epochs in below lines)
 		           weightDecay = 0.0004, --0.0004 0
 		           momentum = 0.9,
 		           learningRateDecay = 0 }--3e-5	
@@ -315,17 +313,17 @@ if isTrain then
 	    ----- mean normalization -------------
 	    im1, im2 = normalizeMean(meanData, im1, im2)
 	    
-	    local tmpValImg1 = torch.Tensor(im1:size(1),im1:size(2),448, 1024)
-	    local tmpValImg2 = torch.Tensor(im2:size(1),im2:size(2),448, 1024)
-	    local tmpValFlow = torch.Tensor(flow:size(1),flow:size(2),448, 1024)
+	    local tmpValImg1 = torch.Tensor(im1:size(1),im1:size(2),384, 512)
+	    local tmpValImg2 = torch.Tensor(im2:size(1),im2:size(2),384, 512)
+	    local tmpValFlow = torch.Tensor(flow:size(1),flow:size(2),384, 512)
 	    if opTDataMode == 'chair' then
 	      input = torch.cat(im1, im2, 2)
 	      flowInput = flow
  	    elseif opTDataMode == 'sintel' then
 	      for i = 1,im1:size(1) do 
-	        tmpValImg1[i] = image.scale(im1[i],1024,448)
-    	        tmpValImg2[i] = image.scale(im2[i],1024,448) 
-    	        tmpValFlow[i] = image.scale(flow[i],1024,448)
+	        tmpValImg1[i] = image.scale(im1[i],512,384)
+    	        tmpValImg2[i] = image.scale(im2[i],512,384) 
+    	        tmpValFlow[i] = image.scale(flow[i],512,384)
 	      end
     	      input = torch.cat(tmpValImg1, tmpValImg2, 2)
 	      flowInput =  tmpValFlow
@@ -368,11 +366,8 @@ if isTrain then
 	      local err = criterion:forward(output, down5) --grdTruth
 	      f = f + err
 		-- estimate df/dW
-	      --local df_do = criterion:backward(output, down5) --grdTruth
-	      --model:backward(input, df_do)
-	      -- uncomment above two lines
-	
-	      
+	      local df_do = criterion:backward(output, down5) --grdTruth
+	      model:backward(input, df_do)
 	      -- evaluate function for complete mini batch
 	      --[[for i = 1,im1:size(1) do
 		-- estimate f		
@@ -499,20 +494,9 @@ if isTrain then
 	-- if required, save snapshot at the end
 	--saveModel(model, opTsave, snapshot_prefix, opTepoch)
 else
-  
-  local models = {'residual/flownetLC1_LR3_151_Model','residual/res2/flownetLC1_LR3_50_Model','residual/res3/flownetLC1_LR3_130_Model','residual/res4/flownetLC1_LR3_140_Model','residual/res6/flownetLC1_LR3_140_Model','residual/res7/flownetLC1_LR3_169_Model', 'residual/finetuning/augm/flownetLC1_LR3_176_Model', 'residual/finetuning/res2/flownetLC1_LR3_65_Model', 'residual/finetuning/res3/flownetLC1_LR3_145_Model','residual/finetuning/res4/flownetLC1_LR3_145_Model','residual/res6/flownetLC1_LR3_144_Model','residual/res7/flownetLC1_LR3_170_Model'} --together
+  local models = {'residual/plain/flownetLC1_LR3_5_Model','residual/plain/flownetLC1_LR3_10_Model','residual/plain/flownetLC1_LR3_15_Model','residual/plain/flownetLC1_LR3_20_Model','residual/plain/flownetLC1_LR3_25_Model','residual/plain/flownetLC1_LR3_30_Model','residual/plain/flownetLC1_LR3_35_Model','residual/plain/flownetLC1_LR3_40_Model','residual/plain/flownetLC1_LR3_45_Model','residual/plain/flownetLC1_LR3_50_Model','residual/plain/flownetLC1_LR3_55_Model','residual/plain/flownetLC1_LR3_60_Model','residual/res4/flownetLC1_LR3_10_Model','residual/res4/flownetLC1_LR3_20_Model','residual/res5/flownetLC1_LR3_30_Model','residual/res5/flownetLC1_LR3_40_Model'}
 
-  --local models = {'residual/finetuning/augm/flownetLC1_LR3_176_Model', 'residual/finetuning/res2/flownetLC1_LR3_65_Model', 'residual/finetuning/res3/flownetLC1_LR3_145_Model','residual/finetuning/res4/flownetLC1_LR3_145_Model','residual/res6/flownetLC1_LR3_144_Model','residual/res7/flownetLC1_LR3_170_Model'} -- finetuned models
-
-  --local models = {'residual/flownetLC1_LR3_151_Model','residual/res2/flownetLC1_LR3_50_Model','residual/res3/flownetLC1_LR3_130_Model','residual/res4/flownetLC1_LR3_140_Model','residual/res6/flownetLC1_LR3_140_Model','residual/res7/flownetLC1_LR3_169_Model'} -- models without finetuning
-
-  --local models = {'residual/res7/flownetLC1_LR3_168_Model','residual/res7/flownetLC1_LR3_169_Model','residual/res7/flownetLC1_LR3_170_Model','residual/res7/flownetLC1_LR3_175_Model','residual/res7/flownetLC1_LR3_180_Model','residual/res7/flownetLC1_LR3_185_Model','residual/res7/flownetLC1_LR3_190_Model'}  
- 
-  --local models = {'residual/res7/flownetLC1_LR3_120_Model','residual/res7/flownetLC1_LR3_125_Model','residual/res7/flownetLC1_LR3_130_Model','residual/res7/flownetLC1_LR3_135_Model','residual/res7/flownetLC1_LR3_160_Model','residual/res7/flownetLC1_LR3_161_Model','residual/res7/flownetLC1_LR3_168_Model','residual/res7/flownetLC1_LR3_169_Model','residual/res7/flownetLC1_LR3_170_Model','residual/res7/flownetLC1_LR3_175_Model','residual/res7/flownetLC1_LR3_180_Model','residual/res7/flownetLC1_LR3_185_Model','residual/res7/flownetLC1_LR3_190_Model','residual/res6/flownetLC1_LR3_140_Model'}  
-
-  --local models = {'residual/res4/flownetLC1_LR3_10_Model','residual/res4/flownetLC1_LR3_20_Model','residual/res6/flownetLC1_LR3_50_Model','residual/res6/flownetLC1_LR3_55_Model','residual/res6/flownetLC1_LR3_60_Model','residual/res6/flownetLC1_LR3_70_Model','residual/res6/flownetLC1_LR3_80_Model','residual/res6/flownetLC1_LR3_85_Model','residual/res6/flownetLC1_LR3_130_Model','residual/res6/flownetLC1_LR3_135_Model','residual/res6/flownetLC1_LR3_140_Model','residual/res6/flownetLC1_LR3_141_Model','residual/res6/flownetLC1_LR3_142_Model','residual/res6/flownetLC1_LR3_143_Model','residual/res6/flownetLC1_LR3_144_Model','residual/res6/flownetLC1_LR3_145_Model','residual/res6/flownetLC1_LR3_146_Model','residual/res6/flownetLC1_LR3_147_Model','residual/res6/flownetLC1_LR3_148_Model','residual/res6/flownetLC1_LR3_149_Model','residual/res6/flownetLC1_LR3_150_Model'}
-
-  --local models = {'residual/res4/flownetLC1_LR3_40_Model','residual/res4/flownetLC1_LR3_60_Model','residual/res4/flownetLC1_LR3_70_Model','residual/res4/flownetLC1_LR3_80_Model','residual/res5/flownetLC1_LR3_35_Model','residual/res5/flownetLC1_LR3_40_Model','residual/res5/flownetLC1_LR3_45_Model','residual/res5/flownetLC1_LR3_60_Model','residual/res5/flownetLC1_LR3_80_Model','residual/res5/flownetLC1_LR3_90_Model','residual/res5/flownetLC1_LR3_95_Model','residual/res5/flownetLC1_LR3_101_Model','residual/res5/flownetLC1_LR3_105_Model','residual/res5/flownetLC1_LR3_109_Model','residual/res5/flownetLC1_LR3_115_Model','residual/res5/flownetLC1_LR3_120_Model','residual/res5/flownetLC1_LR3_125_Model','residual/res5/flownetLC1_LR3_130_Model','residual/res5/flownetLC1_LR3_135_Model','residual/res5/flownetLC1_LR3_140_Model'}
+  --local models = {'residual/res4/flownetLC1_LR3_10_Model','residual/res4/flownetLC1_LR3_20_Model','residual/res4/flownetLC1_LR3_30_Model','residual/res3/flownetLC1_LR3_10_Model','residual/res3/flownetLC1_LR3_20_Model'}	
 
 --local models = {'residual/res4/flownetLC1_LR3_70_Model','residual/res4/flownetLC1_LR3_75_Model','residual/res4/flownetLC1_LR3_80_Model','residual/res4/flownetLC1_LR3_85_Model','residual/res4/flownetLC1_LR3_100_Model','residual/res4/flownetLC1_LR3_120_Model','residual/res4/flownetLC1_LR3_130_Model','residual/res4/flownetLC1_LR3_135_Model','residual/res4/flownetLC1_LR3_140_Model','residual/res4/flownetLC1_LR3_145_Model','residual/res4/flownetLC1_LR3_155_Model','residual/res4/flownetLC1_LR3_160_Model','residual/res4/flownetLC1_LR3_165_Model','residual/res4/flownetLC1_LR3_170_Model','residual/res3/flownetLC1_LR3_60_Model','residual/res3/flownetLC1_LR3_65_Model', 'residual/res3/flownetLC1_LR3_70_Model','residual/res3/flownetLC1_LR3_75_Model','residual/res3/flownetLC1_LR3_130_Model', 'residual/res3/flownetLC1_LR3_130_Model(noAugAft100)'}
 

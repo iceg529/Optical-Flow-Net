@@ -13,18 +13,14 @@ function getResModel()
   -- stage 1 : filter bank -> squashing -> filter bank -> squashing
   local h1 = imgIn - nn.SpatialConvolution(6, 64, 7, 7, 2, 2, 3, 3)
                    - nn.ReLU()
-		   - nn.SpatialBatchNormalization(64)
                    - nn.SpatialConvolution(64, 64, 5, 5, 2, 2, 2, 2)
                    - nn.ReLU()
-		   - nn.SpatialBatchNormalization(64)
 
   -- stage 2 : filter bank -> squashing -> filter bank -> squashing
   local h2 = h1 - nn.SpatialConvolution(64, 64, 3, 3, 1, 1, 1, 1)
                 - nn.ReLU()
-		- nn.SpatialBatchNormalization(64)
                 - nn.SpatialConvolution(64, 64, 3, 3, 1, 1, 1, 1)
 		- nn.ReLU()
-		- nn.SpatialBatchNormalization(64)
 
   local h2_1 = nn.CAddTable()({h2, h1})
                
@@ -32,22 +28,18 @@ function getResModel()
   -- stage 3 : filter bank -> squashing -> filter bank -> squashing
   local h3 = h2_1 - nn.SpatialConvolution(64, 64, 3, 3, 1, 1, 1, 1)
                   - nn.ReLU()
-		  - nn.SpatialBatchNormalization(64)
                   - nn.SpatialConvolution(64, 64, 3, 3, 1, 1, 1, 1)
 		  - nn.ReLU()
-		  - nn.SpatialBatchNormalization(64)
 
   local h3_1 = nn.CAddTable()({h3, h2_1})               
        
   -- stage 4 : filter bank -> squashing -> filter bank -> squashing
   local h4_0 = h3_1 - nn.SpatialConvolution(64, 64, 3, 3, 1, 1, 1, 1)
                     - nn.ReLU()
-		    - nn.SpatialBatchNormalization(64)
                 
   -- stage 6 : filter bank -> squashing -> filter bank -> squashing
   local h6 = h4_0 - nn.SpatialConvolution(64, 64, 3, 3, 1, 1, 1, 1)
                   - nn.ReLU()
-		  - nn.SpatialBatchNormalization(64)
                   
   local h6_0 = nn.CAddTable()({h6, h4_0})               
 
@@ -68,32 +60,26 @@ function getResModel()
   -- stage 7 : filter bank -> squashing -> filter bank -> squashing
   local h7 = h6_1 - nn.SpatialConvolution(64, 128, 3, 3, 1, 1, 1, 1)
                   - nn.ReLU()
-		  - nn.SpatialBatchNormalization(128)
                   - nn.SpatialConvolution(128, 128, 3, 3, 1, 1, 1, 1)
 		  - nn.ReLU()
-		  - nn.SpatialBatchNormalization(128)
 		
   local h7_1 = nn.CAddTable()({h7, h6_concat})               
        
   -- stage 8 : filter bank -> squashing -> filter bank -> squashing
   local h8 = h7_1 - nn.SpatialConvolution(128, 128, 3, 3, 1, 1, 1, 1)
                   - nn.ReLU()
-		  - nn.SpatialBatchNormalization(128)
                   - nn.SpatialConvolution(128, 128, 3, 3, 1, 1, 1, 1)
 		  - nn.ReLU()
-		  - nn.SpatialBatchNormalization(128)
 
   local h8_1 = nn.CAddTable()({h8, h7_1})               
        
   -- stage 9 : filter bank -> squashing -> filter bank -> squashing
   local h9_0 = h8_1 - nn.SpatialConvolution(128, 128, 3, 3, 1, 1, 1, 1)
                     - nn.ReLU()
-		    - nn.SpatialBatchNormalization(128)
 
   -- stage 11 : filter bank -> squashing -> filter bank -> squashing
   local h11 = h9_0 - nn.SpatialConvolution(128, 128, 3, 3, 1, 1, 1, 1)
                     - nn.ReLU()
-		    - nn.SpatialBatchNormalization(128)
                     
   local h11_1 = nn.CAddTable()({h11, h9_0})                
 	--	- nn.SpatialMaxPooling(2, 2, 2, 2)
@@ -113,32 +99,26 @@ function getResModel()
   -- stage 12 : filter bank -> squashing -> filter bank -> squashing
   local h12 = h11_1 - nn.SpatialConvolution(128, 256, 3, 3, 1, 1, 1, 1)
                     - nn.ReLU()
-    		    --  - nn.SpatialBatchNormalization(256)
                     - nn.SpatialConvolution(256, 256, 3, 3, 1, 1, 1, 1)
 		    - nn.ReLU()
-		    --  - nn.SpatialBatchNormalization(256)
 
   local h12_1 = nn.CAddTable()({h12, h11_concat})                
 
   -- stage 13 : filter bank -> squashing -> filter bank -> squashing
   local h13 = h12_1 - nn.SpatialConvolution(256, 256, 3, 3, 1, 1, 1, 1)
                     - nn.ReLU()
-		    --  - nn.SpatialBatchNormalization(256)
                     - nn.SpatialConvolution(256, 256, 3, 3, 1, 1, 1, 1)
 		    - nn.ReLU()
-		    --  - nn.SpatialBatchNormalization(256)
 
   local h13_1 = nn.CAddTable()({h13, h12_1})                
        
   -- stage 14 : filter bank -> squashing -> filter bank -> squashing
   local h14_0 = h13_1 - nn.SpatialConvolution(256, 256, 3, 3, 1, 1, 1, 1)
                       - nn.ReLU()
-		      --  - nn.SpatialBatchNormalization(256)
                 
   -- stage 16 : filter bank -> squashing -> filter bank -> squashing
   local h16 = h14_0 - nn.SpatialConvolution(256, 256, 3, 3, 1, 1, 1, 1)
                     - nn.ReLU()
-		    --  - nn.SpatialBatchNormalization(256)
 
   local h16_1 = nn.CAddTable()({h16, h14_0})
                 
@@ -202,13 +182,7 @@ function getResModel()
   local flowDisp3    = nn.JoinTable(2)({flowDisp2, h14_0, h16_1}) - nn.SpatialConvolution(514, 2, 3, 3, 1, 1, 1, 1)
 							         
   -- additions Res 4
-  local flowDisp3_1    = nn.JoinTable(2)({flowDisp1, flowDisp2, flowDisp3}) - nn.SpatialConvolution(6, 100, 3, 3, 1, 1, 1, 1)
-									    - nn.ReLU()
-			 						    - nn.SpatialConvolution(100, 50, 3, 3, 1, 1, 1, 1)
-									    - nn.ReLU()
-			 						    - nn.SpatialConvolution(50, 20, 3, 3, 1, 1, 1, 1)
-									    - nn.ReLU()
-			 						    - nn.SpatialConvolution(20, 2, 3, 3, 1, 1, 1, 1)
+  local flowDisp3_1    = nn.JoinTable(2)({flowDisp1, flowDisp2, flowDisp3}) - nn.SpatialConvolution(6, 2, 3, 3, 1, 1, 1, 1)
 									    - nn.SpatialUpSamplingBilinear(2)
 
   -- Final Convolution stage

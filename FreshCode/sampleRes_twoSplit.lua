@@ -17,14 +17,14 @@ if dir_path ~= nil then
   package.path = dir_path .."?.lua;".. package.path
 end
 
-local opTtrain = 'trainData_Sintel.h5' --trainData.h5 trainData_16.h5 trainData_Sintel.h5
+local opTtrain = 'trainData_SintelClean.h5' --trainData.h5 trainData_16.h5 trainData_Sintel.h5
 local opTval = 'testData_SintelClean.h5' --testData.h5 testData_SintelClean.h5
 local opTDataMode = 'sintel' -- chair or sintel
 local opTshuffle = false 
 local opTthreads = 3 -- 3 1
 local opTepoch = 1 
 local opTsnapshotInterval = 10
-local epIncrement = 140 --160 --151, 0 
+local epIncrement = 0 --140 -- 140 --160 --151, 0 
 local opTsave = "logFiles/residual"  -- "logFiles/correlation" "logFiles/finetuning" , "logFiles", "logFiles/newWithoutReg"
 local isTrain = true -- true false
 local isCorr = false -- true false
@@ -124,10 +124,13 @@ downSampleFlowWeights:cuda()
 --local model = require('weight-init')(getResModel(), 'kaiming')
 --local model = torch.load('logFiles/residual/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- this is the model before finetuning with sintel
 
-local model = torch.load('logFiles/residual/res4/flownetLC1_LR3_' .. epIncrement .. '_Model.t7')
+--local model = torch.load('logFiles/residual/res5/flownetLC1_LR3_' .. epIncrement .. '_Model.t7')
+--local model = torch.load('logFiles/residual/res4/flownetLC1_LR3_' .. epIncrement .. '_Model.t7')
 --local model = torch.load('logFiles/residual/finetuning/res3/flownetLC1_LR3_' .. epIncrement .. '_Model.t7')
 --local model = torch.load('logFiles/residual/res3/flownetLC1_LR3_' .. epIncrement .. '_Model.t7')
 --local model = torch.load('logFiles/residual/res2/flownetLC1_LR3_' .. epIncrement .. '_Model.t7') -- for res2 (addition of multiple disp)
+
+local model = torch.load('logFiles/residual/finetuning/res4/flownetLC1_LR3_145_Model.t7') -- to fill table
 
 --local criterion = nn.AvgEndPointError() --SmoothL1Criterion AvgEndPointError
 --criterion = criterion:cuda()
