@@ -10,7 +10,7 @@ from sys import getsizeof
 import torchfile
 
 
-trainNum = list(range(904*2)) #22232
+trainNum = list(range(904*1)) #22232 904*2 904
 random.shuffle(trainNum)
 testNum = list(range(137*1))  #640
 random.shuffle(testNum)
@@ -36,7 +36,7 @@ def readFloToFile(floFile):
 
 def writeTrainData():
 	print('writing to file ...')
-	f = h5py.File("FreshCode/trainData_Sintel.h5", 'w')
+	f = h5py.File("FreshCode/trainData_SintelFinal.h5", 'w') # trainData_Sintel trainData_SintelClean trainData_SintelFinal
 	img1List = open("Sintel_Train_Img1.list").readlines()
 	img2List = open("Sintel_Train_Img2.list").readlines()
 	flowList = open("Sintel_Train_Flow.list").readlines()
@@ -44,12 +44,13 @@ def writeTrainData():
 	batInd = 1
 	X_data = np.empty([8, 8, 436, 1024]) #change to img size (448 not orig size , multiple of 32)
 	for i in trainNum:
-		print(i)
-		temp = np.transpose(np.asarray(misc.imread(str(img1List[i].split()[0]))), (2,0,1))
+		newInd = i + 904*1 # add 904*1 for sintel final, add 0 for sintel clean
+		print(newInd)
+		temp = np.transpose(np.asarray(misc.imread(str(img1List[newInd].split()[0]))), (2,0,1))
 		X_data[j, :3] = temp
-		temp = np.transpose(np.asarray(misc.imread(str(img2List[i].split()[0]))), (2,0,1))
+		temp = np.transpose(np.asarray(misc.imread(str(img2List[newInd].split()[0]))), (2,0,1))
 		X_data[j, [3,4,5]] = temp
-		temp = np.transpose(np.asarray(readFloToFile(str(flowList[i].split()[0]))), (0,2,1))
+		temp = np.transpose(np.asarray(readFloToFile(str(flowList[newInd].split()[0]))), (0,2,1))
 		X_data[j, 6:] = temp
 		if j == 7:
 			print(X_data.shape)
@@ -65,7 +66,7 @@ def writeTrainData():
 
 def writeTestData():
 	print('writing to file ...')
-	f = h5py.File("FreshCode/testData_SintelClean.h5", 'w')
+	f = h5py.File("FreshCode/testData_SintelFinal.h5", 'w')  # testData_SintelFinal testData_SintelClean
 	img1List = open("Sintel_Test_Img1.list").readlines()
 	img2List = open("Sintel_Test_Img2.list").readlines()
 	flowList = open("Sintel_Test_Flow.list").readlines()
@@ -73,11 +74,37 @@ def writeTestData():
 	batInd = 1
 	X_data = np.empty([137*1, 8, 436, 1024]) # [640, 8, 384, 512]
 	for i in testNum:
+		newInd = i+136 #for sintel final, add 0 for sintel clean
 		print(i)
-		X_data[j, :3] = np.transpose(np.asarray(misc.imread(str(img1List[i].split()[0]))), (2,0,1))
-		X_data[j, [3,4,5]] = np.transpose(np.asarray(misc.imread(str(img2List[i].split()[0]))), (2,0,1))
-		X_data[j, 6:] = np.transpose(np.asarray(readFloToFile(str(flowList[i].split()[0]))), (0,2,1))
+		X_data[j, :3] = np.transpose(np.asarray(misc.imread(str(img1List[newInd].split()[0]))), (2,0,1))
+		X_data[j, [3,4,5]] = np.transpose(np.asarray(misc.imread(str(img2List[newInd].split()[0]))), (2,0,1))
+		X_data[j, 6:] = np.transpose(np.asarray(readFloToFile(str(flowList[newInd].split()[0]))), (0,2,1))
 		if j == ((137*1) - 1):
+			print(X_data.shape)
+			dSetName = "/data"+str(batInd)
+			f.create_dataset(dSetName, data=X_data, compression='gzip', compression_opts=9)
+			j = 0
+		else:
+			j = j+1
+	
+  	f.close()
+
+def writeTestData2():
+	print('writing to file ...')
+	f = h5py.File("FreshCode/trainData_SintelFinal2.h5", 'w')  # testData_SintelFinal testData_SintelClean
+	img1List = open("Sintel_Train_Img1.list").readlines()
+	img2List = open("Sintel_Train_Img2.list").readlines()
+	flowList = open("Sintel_Train_Flow.list").readlines()
+	j = 0
+	batInd = 1
+	X_data = np.empty([904*1, 8, 436, 1024]) # [640, 8, 384, 512]
+	for i in trainNum:
+		newInd = i+(904*1) #for sintel final, add 0 for sintel clean
+		print(i)
+		X_data[j, :3] = np.transpose(np.asarray(misc.imread(str(img1List[newInd].split()[0]))), (2,0,1))
+		X_data[j, [3,4,5]] = np.transpose(np.asarray(misc.imread(str(img2List[newInd].split()[0]))), (2,0,1))
+		X_data[j, 6:] = np.transpose(np.asarray(readFloToFile(str(flowList[newInd].split()[0]))), (0,2,1))
+		if j == ((904*1) - 1):
 			print(X_data.shape)
 			dSetName = "/data"+str(batInd)
 			f.create_dataset(dSetName, data=X_data, compression='gzip', compression_opts=9)
@@ -110,20 +137,30 @@ def sampleForColorCoding():
 	"""
 		
 	
-	data1 = np.transpose(np.asarray(misc.imread('../MPI-Sintel-complete/training/clean/bamboo_2/frame_0015.png')), (2,0,1)) #bamboo_2 alley_1
-        data2 = np.transpose(np.asarray(misc.imread('../MPI-Sintel-complete/training/clean/bamboo_2/frame_0016.png')), (2,0,1))
-	data3 = np.transpose(np.asarray(readFloToFile('../MPI-Sintel-complete/training/flow/bamboo_2/frame_0015.flo')), (0,2,1))
-	data4 = np.transpose(np.asarray(readFloToFile('FreshCode/Evaluate/sintel4_caffe.flo')), (0,2,1)) #sintel3_epic.flo
+	#data1 = np.transpose(np.asarray(misc.imread('../MPI-Sintel-complete/training/clean/alley_1/frame_0001.png')), (2,0,1)) #bamboo_2(frame_0015) alley_1(frame_0001) cave_4(frame_0049) alley_2(frame30)
+        #data2 = np.transpose(np.asarray(misc.imread('../MPI-Sintel-complete/training/clean/alley_1/frame_0002.png')), (2,0,1))
+	#data3 = np.transpose(np.asarray(readFloToFile('../MPI-Sintel-complete/training/flow/alley_1/frame_0001.flo')), (0,2,1))
+	##data4 = np.transpose(np.asarray(readFloToFile('FreshCode/Evaluate/sintel4_caffe.flo')), (0,2,1)) #sintel3_epic.flo
+	#data4 = np.transpose(np.asarray(readFloToFile('FreshCode/Evaluate/sintel1.flo')), (0,2,1)) #flownet2
 
-	#data3 = np.transpose(np.asarray(readFloToFile('../../FlowNet/dispflownet-release/models/FlowNetS/data/0000000-gt.flo')), (0,2,1))
-	#data1 = np.transpose(np.asarray(misc.imread('../../FlowNet/dispflownet-release/models/FlowNetS/data/0000000-img0.ppm')), (2,0,1))
-        #data2 = np.transpose(np.asarray(misc.imread('../../FlowNet/dispflownet-release/models/FlowNetS/data/0000000-img1.ppm')), (2,0,1))
-	#data4 = np.transpose(np.asarray(readFloToFile('../../FlowNet/dispflownet-release/models/FlowNetS/data/0000000-gt.flo')), (0,2,1))
+	data3 = np.transpose(np.asarray(readFloToFile('../../FlowNet/dispflownet-release/models/FlowNetS/data/00001_flow.flo')), (0,2,1))
+	data1 = np.transpose(np.asarray(misc.imread('../../FlowNet/dispflownet-release/models/FlowNetS/data/00001_img1.ppm')), (2,0,1))
+        data2 = np.transpose(np.asarray(misc.imread('../../FlowNet/dispflownet-release/models/FlowNetS/data/00001_img2.ppm')), (2,0,1))
+	##data4 = np.transpose(np.asarray(readFloToFile('../../FlowNet/dispflownet-release/models/FlowNetS/data/0000000-gt.flo')), (0,2,1))
+	#data4 = np.transpose(np.asarray(readFloToFile('FreshCode/Evaluate/sintel1.flo')), (0,2,1)) #flownet2
+	data5 = np.transpose(np.asarray(readFloToFile('Middlebury/other-data/Hydrangea/flow10.flo')), (0,2,1))
+        data4 = np.transpose(np.asarray(readFloToFile('Middlebury/other-data/Hydrangea/flowOut.flo')), (0,2,1))
+	print(data3.shape)
+
+	#data3 = np.transpose(np.asarray(readFloToFile('Middlebury/other-data/Dimetrodon/flow10.flo')), (0,2,1))
+	#data1 = np.transpose(np.asarray(misc.imread('Middlebury/other-data/Dimetrodon/frame10.png')), (2,0,1))
+        #data2 = np.transpose(np.asarray(misc.imread('Middlebury/other-data/Dimetrodon/frame11.png')), (2,0,1))	
 
 	f.create_dataset("/data1", data=data1)
 	f.create_dataset("/data2", data=data2)
 	f.create_dataset("/data3", data=data3)	
 	f.create_dataset("/data4", data=data4)
+	f.create_dataset("/data5", data=data5)
 
 def createMeanImg():
 	f = h5py.File("FreshCode/meanDataSintel.h5", 'w')
@@ -165,7 +202,7 @@ def writeSintelFeatures():
 	print('writing to file ...')
 	f = h5py.File("FreshCode/trainData_SintelFeatures.h5", 'w')
 	f2 = h5py.File("FreshCode/trainData_SintelFlowData.h5", 'w')
-	for i in range(1,227): #range(1,227) (227,453)
+	for i in range(1,114): #113 for clean and final separately #range(1,227) (227,453)
 		X_data = torchfile.load('FreshCode/sintelFeat/sintelFeatures'+str(i)+'.t7')
 		flo_data = torchfile.load('FreshCode/sintelFeat/flow'+str(i)+'.t7')
 		print(i)
@@ -181,8 +218,8 @@ def writeSintelFeatures():
 
 #writeTestData()
 #writeTrainData()
-#sampleForColorCoding()
+sampleForColorCoding()
 #createMeanImg()
-writeSintelFeatures()
-
+#writeSintelFeatures()
+#writeTestData2()
 
